@@ -10,7 +10,7 @@ Open Source
 -----------
 
 The Quip client is completely open source, allowing transparency, review and feedback on the source code. The aim is to 
-ensure a secure messaging platform with no hidden or closed code. See the [LICENSE](https://github.com/quip/LICENSE`) 
+ensure a secure messaging platform with no hidden or closed code. See the [LICENSE](https://github.com/cbrunker/quip/LICENSE) 
 file for further licensing information.
 
 Peer to Peer
