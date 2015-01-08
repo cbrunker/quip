@@ -1,7 +1,7 @@
 Quip - Secure Instant Messaging
 ===============================
 
-[Quip](http://quip.com) is a peer to peer instant messaging platform built around security and encryption. The available 
+[Quip](http://quip.im) is a peer to peer instant messaging platform built around security and encryption. The available 
 Quip client has been developed to provide a clean and easy to use interface while all the security and privacy business 
 happens in the background.
 
