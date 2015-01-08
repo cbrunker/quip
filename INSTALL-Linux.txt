@@ -1,0 +1,9 @@
+Install prerequisits
+
+* Python 3.4.x
+* OpenSSL >= 1.0.1
+* pynacl >= 0.2.3
+** NaCl >= 0.3.0
+* Pyside >= 1.2.1
+** Requires QT4
+
