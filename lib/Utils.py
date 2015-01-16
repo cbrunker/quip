@@ -7,7 +7,7 @@ from hashlib import sha1
 from os import path, listdir
 from sys import platform
 from zipfile import ZipFile
-from subprocess import call
+from subprocess import Popen, TimeoutExpired
 
 import nacl.utils
 import nacl.secret
@@ -72,7 +72,6 @@ def checkCerts():
     command = None
 
     success = False
-    shell = False
     # check to see if required certificates exist
     if not all(True if path.isfile(path.join(resDir, cert)) else False for cert in ('server.crt', 'server.key.orig')):
         ############
@@ -81,7 +80,6 @@ def checkCerts():
         if platform in ('linux', 'darwin'):
             # bash script run
             command = 'sh {}'.format(path.join(resDir, 'create_certs_linux.sh'))
-            shell = True
         elif platform == 'win32':
             hasOpenSSL = False
 
@@ -95,12 +93,13 @@ def checkCerts():
                     break
 
             if not hasOpenSSL and files:
-                # sorted filename to list newest version first
-                for ofile in sorted(f for isDir, f in files if not isDir and path.splitext(f) == '.zip'):
+                # sorted filename to list newest version first)
+                for ofile in sorted(f for isDir, f in files if not isDir and path.splitext(f)[1] == '.zip'):
                     # extract archive
-                    with ZipFile(ofile, 'r') as ozip:
-                        newDir = path.splitext(ofile)[0]
-                        ozip.extractall(path=path.join(resDir, newDir))
+                    print("Extracting...")
+                    with ZipFile(path.join(resDir, ofile), 'r') as ozip:
+                        newDir = path.join(resDir, path.splitext(ofile)[0])
+                        ozip.extractall(path=newDir)
 
                     # verify openssl.exe exists in directory
                     if path.isfile(path.join(newDir, 'openssl.exe')):
@@ -113,10 +112,15 @@ def checkCerts():
                     config.writelines([newDir])
 
                 # windows bat command file
-                command = 'cmd /c {}'.format(path.join(resDir, 'create_certs_windows.bat'))
+                command = r'cmd /c {}'.format(path.join(resDir, 'create_certs_windows.bat'))
 
         if command:
-            call([command], shell=shell)
+            proc = Popen([command], cwd=resDir, shell=True)
+            try:
+                proc.wait(180)
+            except TimeoutExpired:
+                proc.kill()
+                
             # check command has generated correct files
             if all(True if path.isfile(path.join(resDir, cert)) else False for cert in ('server.crt', 'server.key.orig')):
                 success = True

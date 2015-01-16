@@ -1737,6 +1737,7 @@ class LoginWindow(QtGui.QMainWindow):
 if __name__ == "__main__":
     import logging
     logging.basicConfig(level=logging.INFO)
+
     app = QtGui.QApplication(sys.argv)
     if checkCerts():
         mySW = LoginWindow()
