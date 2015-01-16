@@ -27,7 +27,7 @@ from lib.Config import Configuration
 from lib import Exceptions
 from lib.Constants import STATUS_OFFLINE, STATUS_INVISIBLE, STATUS_AWAY, STATUS_ONLINE, STATUS_BUSY, STATUSES_BASIC, \
     LIMIT_PROFILE_VALUES
-from lib.Utils import isValidUUID
+from lib.Utils import isValidUUID, checkCerts
 from lib.Client import ServerClient
 from lib.Database import getProfiles, getAvatar, getFriends, getMasks, setAvatar, delFileRequests
 from lib.Countries import COUNTRIES
@@ -1738,6 +1738,11 @@ if __name__ == "__main__":
     import logging
     logging.basicConfig(level=logging.INFO)
     app = QtGui.QApplication(sys.argv)
-    mySW = LoginWindow()
-    mySW.show()
-    sys.exit(app.exec_())
+    if checkCerts():
+        mySW = LoginWindow()
+        mySW.show()
+        sys.exit(app.exec_())
+    else:
+        messageBox('error', "Unable to find or create encryption certificates. Check 'Resources' directory")
+        app.quit()
+        sys.exit(-1)
