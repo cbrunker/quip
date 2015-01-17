@@ -2,6 +2,8 @@ import re
 from collections import namedtuple
 from os import path
 
+from lib.Utils import absolutePath
+
 ####################
 # Global references
 ####################
@@ -209,8 +211,8 @@ MIMETYPES = {'.a': 'application-octet-stream',
 EMOTICON_RESOURCES = {r: t for t, r in EMOTICONS.items()}
 
 # flag image directory relative path
-FLAGS = path.join('Resources', 'Images', 'flags')
-EXT = path.join('Resources', 'Images', 'extensions')
+FLAGS = absolutePath(path.join('Resources', 'Images', 'flags'))
+EXT = absolutePath(path.join('Resources', 'Images', 'extensions'))
 
 #################
 # Regex patterns

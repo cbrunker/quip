@@ -1,11 +1,11 @@
 #
 # Utility functions
 #
+import sys
 from functools import partial
 from uuid import UUID
 from hashlib import sha1
 from os import path, listdir
-from sys import platform
 from zipfile import ZipFile
 from subprocess import Popen, TimeoutExpired
 
@@ -77,10 +77,10 @@ def checkCerts():
         ############
         # Check OS
         ############
-        if platform in ('linux', 'darwin'):
+        if sys.platform in ('linux', 'darwin'):
             # bash script run
             command = 'sh {}'.format(path.join(resDir, 'create_certs_linux.sh'))
-        elif platform == 'win32':
+        elif sys.platform == 'win32':
             hasOpenSSL = False
 
             # check for openssl requirement (downloaded during installer run)
@@ -128,3 +128,18 @@ def checkCerts():
         success = True
 
     return success
+
+def absolutePath(pathname):
+    """
+    Return the absolute path of the given file or directory
+
+    @return: absolute path
+    """
+    if getattr(sys, 'frozen', False):
+        # Frozen application denotes packaged application, modules are moved into a zip
+        datadir = path.dirname(sys.executable)
+    else:
+        # Source based installation, use parent directory of this module's directory
+        datadir = path.join(path.dirname(__file__), path.pardir)
+
+    return path.abspath(path.join(datadir, pathname))

@@ -20,7 +20,7 @@ import nacl.utils
 from nacl.secret import SecretBox
 
 # application modules
-from lib.Utils import encrypt
+from lib.Utils import encrypt, absolutePath
 
 
 def getCursor(location=path.join('Resources', 'quip.db')):
@@ -29,7 +29,7 @@ def getCursor(location=path.join('Resources', 'quip.db')):
     @param location: file location of database
     @return: database connection cursor
     """
-    return connect(location, isolation_level=None).cursor()
+    return connect(absolutePath(location), isolation_level=None).cursor()
 
 def getAddress(safe, profileId, mask):
     """
