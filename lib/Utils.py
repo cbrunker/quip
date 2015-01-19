@@ -68,7 +68,7 @@ def checkCerts():
 
     @returns: Boolean value based on success
     """
-    resDir = path.abspath(path.join(path.dirname(path.abspath(__file__)), path.pardir, 'Resources'))
+    resDir = absolutePath('Resources')
     command = None
 
     success = False
@@ -79,7 +79,7 @@ def checkCerts():
         ############
         if sys.platform in ('linux', 'darwin'):
             # bash script run
-            command = 'sh {}'.format(path.join(resDir, 'create_certs_linux.sh'))
+            command = 'sh {}'.format('create_certs_linux.sh')
         elif sys.platform == 'win32':
             hasOpenSSL = False
 
@@ -96,7 +96,6 @@ def checkCerts():
                 # sorted filename to list newest version first)
                 for ofile in sorted(f for isDir, f in files if not isDir and path.splitext(f)[1] == '.zip'):
                     # extract archive
-                    print("Extracting...")
                     with ZipFile(path.join(resDir, ofile), 'r') as ozip:
                         newDir = path.join(resDir, path.splitext(ofile)[0])
                         ozip.extractall(path=newDir)
@@ -112,7 +111,7 @@ def checkCerts():
                     config.writelines([newDir])
 
                 # windows bat command file
-                command = r'cmd /c {}'.format(path.join(resDir, 'create_certs_windows.bat'))
+                command = r'cmd /c {}'.format('create_certs_windows.bat')
 
         if command:
             proc = Popen([command], cwd=resDir, shell=True)
