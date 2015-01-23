@@ -1318,6 +1318,7 @@ class FriendsList(QtGui.QMainWindow):
         self.ui.actionSearchProfiles.triggered.connect(self.profileSearch)
         self.ui.actionSettings.triggered.connect(self.settingsWindow)
         self.ui.actionTransfers.triggered.connect(self.showTransferWindow)
+        self.ui.actionQuit.triggered.connect(self.shutdown)
 
         self.ui.actionOnline.triggered.connect(self.setStatus)
         self.ui.actionAway.triggered.connect(self.setStatus)
@@ -1326,6 +1327,14 @@ class FriendsList(QtGui.QMainWindow):
 
         # ensure the focus is originally on avatar
         self.ui.avatarLabel.setFocus()
+
+    def closeEvent(self, event):
+        self.p2pClient.shutdown()
+        self.server.stop(self.loop)
+        event.accept()
+
+    def shutdown(self):
+        self.close()
 
     def mouseDoubleClickEvent(self, ev, **kwargs):
         # react to doubleclick in avatar location
