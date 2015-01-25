@@ -20,7 +20,7 @@ from gui.friendRequest import Ui_FriendRequest
 from gui.profileView import Ui_ProfileView
 from gui.Resources import FLAGS, EMOTE_PATTERN, EMOTICONS, RESOURCE_PATTERN, EMOTICON_RESOURCES, URL_PATTERN, Friend, \
     EXT, MIMETYPES
-from gui.Utilities import updateProfile, signIn, messageBox, bytes2human
+from gui.Utilities import updateProfile, signIn, messageBox, bytes2human, Background
 from gui.emoticons import Ui_Emoticons
 from gui.settings import Ui_Settings
 from lib.Config import Configuration
@@ -262,13 +262,12 @@ class FileTransferWindow(QtGui.QMainWindow):
         pbar.setMaximum(0)
 
         location = ''
-        retrieve_file = asyncio.async(self.p2pClient.retrieveFile(self.friends[mask].uid, checksum))
+        retrieve_file = self.p2pClient.retrieveFile(self.friends[mask].uid, checksum)
         try:
             location = self.loop.run_until_complete(retrieve_file)
         except Exceptions.ConnectionFailure:
             # friend may have changed address, contact server for updated details
-            get_details = asyncio.async(self.client.getDetails((self.friend.mask,)))
-            details = self.loop.run_until_complete(get_details)
+            details = self.loop.run_until_complete(self.client.getDetails((self.friend.mask,)))
             if len(details) > 1:
                 # if we have a valid server response, update local details
                 self.p2pClient.friends[self.friend.uid] = details[self.friend.mask][1]
@@ -455,8 +454,7 @@ class FriendRequest(QtGui.QWidget):
         self.callback = callback
 
         if requests is None:
-            get_requests = asyncio.async(self.client.getRequests())
-            self.requests = self.loop.run_until_complete(get_requests)
+            self.requests = self.loop.run_until_complete(self.client.getRequests())
         else:
             self.requests = requests
 
@@ -490,15 +488,12 @@ class FriendRequest(QtGui.QWidget):
         mhash = bytes(sha1(b''.join((self.client.uid, bytes(msg, encoding='utf-8')))).hexdigest(), encoding='ascii')
 
         # attemp connection using last known address (locally stored)
-        friend_completion = asyncio.async(self.p2pclient.friendCompletion(self.uid, mhash=mhash, address=addr))
-        success, token = self.loop.run_until_complete(friend_completion)
+        success, token = self.loop.run_until_complete(self.p2pclient.friendCompletion(self.uid, mhash=mhash, address=addr))
         if success:
-            send_token = asyncio.async(self.client.addAuthorisationToken(token=token))
-            success = self.loop.run_until_complete(send_token)
+            success = self.loop.run_until_complete(self.client.addAuthorisationToken(token=token))
         else:
             # refresh requests from server, will contain current address information
-            get_requests = asyncio.async(self.client.getRequests())
-            self.requests = self.loop.run_until_complete(get_requests)
+            self.requests = self.loop.run_until_complete(self.client.getRequests())
             self.attemptFriendship()
 
         # no longer processing
@@ -546,7 +541,7 @@ class FriendRequest(QtGui.QWidget):
 
 
 class ResultsWindow(QtGui.QMainWindow):
-    def __init__(self, alias, client, profiles, cursor, previous=0, parent=None):
+    def __init__(self, alias, client, profiles, cursor, previous=0, loop=None, parent=None):
         """
         Profile Search Results window
 
@@ -559,6 +554,7 @@ class ResultsWindow(QtGui.QMainWindow):
         self.ui =  Ui_SearchResults()
         self.ui.setupUi(self)
 
+        self.loop = loop or asyncio.get_event_loop()
         self.alias = alias
         self.profiles = profiles
         self.client = client
@@ -605,13 +601,11 @@ class ResultsWindow(QtGui.QMainWindow):
         failed = []
         count = 0
         model = self.ui.profilesListView.model()
-        loop = asyncio.get_event_loop()
         # cycle through all checked profiles
         for uid in (self.profiles[r]['uid'] for r in (r for r in range(model.rowCount()) if model.item(r).checkState() == QtCore.Qt.Checked)):
             count += 1
             # send friend request
-            friend_request = asyncio.async(self.client.friendRequest(uid, message))
-            out = loop.run_until_complete(friend_request)
+            out = self.loop.run_until_complete(self.client.friendRequest(uid, message))
             if not out:
                 # notify user not all requests were sent successfully
                 failed.append(uid)
@@ -669,7 +663,7 @@ class ResultsWindow(QtGui.QMainWindow):
         self.ui.profilesListView.setModel(model)
 
 class ProfileSearchWindow(QtGui.QMainWindow):
-    def __init__(self, alias, client, parent=None):
+    def __init__(self, alias, client, loop=None, parent=None):
         """
         Profile Search Window constructor
 
@@ -682,6 +676,7 @@ class ProfileSearchWindow(QtGui.QMainWindow):
 
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
 
+        self.loop = loop or asyncio.get_event_loop()
         # alias is used in sending default message in results window (friend request)
         self.alias = alias
         self.client = client
@@ -721,10 +716,8 @@ class ProfileSearchWindow(QtGui.QMainWindow):
         if not fields and not uid:
             return
 
-        loop = asyncio.get_event_loop()
         if not uid:
-            search_profiles = asyncio.async(self.client.profileSearch(fields))
-            cursor, found, uids = loop.run_until_complete(search_profiles)
+            cursor, found, uids = self.loop.run_until_complete(self.client.profileSearch(fields))
         else:
             cursor = '0'
             uids = [uid]
@@ -732,13 +725,12 @@ class ProfileSearchWindow(QtGui.QMainWindow):
         profiles = []
         for uid in uids:
             # valid user ID entered, request profile directly based on entered user id
-            get_profile = asyncio.async(self.client.getProfile(uid))
-            profile = loop.run_until_complete(get_profile)
+            profile = self.loop.run_until_complete(self.client.getProfile(uid))
             # add UID for contact addition
             profile['uid'] = uid
             profiles.append(profile)
 
-        self._results = ResultsWindow(self.alias, self.client, profiles, cursor)
+        self._results = ResultsWindow(self.alias, self.client, profiles, cursor, loop=self.loop)
         self._results.show()
 
 class SettingsWindow(QtGui.QMainWindow):
@@ -1014,15 +1006,14 @@ class ChatWindow(QtGui.QMainWindow):
         filePath = QtGui.QFileDialog.getOpenFileName(self, "Select File", '')[0]
         if filePath:
             # submit file transfer request
-            file_request = asyncio.async(self.p2pClient.sendFileRequest(self.friend.uid, filePath))
+            file_request = self.p2pClient.sendFileRequest(self.friend.uid, filePath)
 
             success = False
             try:
                 success = self.loop.run_until_complete(file_request)
             except Exceptions.ConnectionFailure:
                 # friend may have changed address, contact server for updated details
-                get_details = asyncio.async(self.client.getDetails((self.friend.mask,)))
-                details = self.loop.run_until_complete(get_details)
+                details = self.loop.run_until_complete(self.client.getDetails((self.friend.mask,)))
                 if len(details) > 1:
                     # if we have a valid server response, update local details
                     self.p2pClient.friends[self.friend.uid] = details[self.friend.mask][1]
@@ -1098,14 +1089,13 @@ class ChatWindow(QtGui.QMainWindow):
                 msg = msg.replace(url, '<a href="{0}">{0}</a>'.format(url))
 
             # send the message
-            send_message = asyncio.async(self.p2pClient.sendMessage(self.friend.uid, msg))
+            send_message = self.p2pClient.sendMessage(self.friend.uid, msg)
             success = False
             try:
                 success = self.loop.run_until_complete(send_message)
             except Exceptions.ConnectionFailure:
                 # friend may have changed address, contact server for updated details
-                get_details = asyncio.async(self.client.getDetails((self.friend.mask,)))
-                details = self.loop.run_until_complete(get_details)
+                details = self.loop.run_until_complete(self.client.getDetails((self.friend.mask,)))
                 if len(details) > 1:
                     # if we have a valid server response, update local details
                     self.p2pClient.friends[self.friend.uid] = details[self.friend.mask][1]
@@ -1247,7 +1237,7 @@ class FriendListModel(QtCore.QAbstractListModel):
 
 class FriendsList(QtGui.QMainWindow):
 
-    def __init__(self, client, server, p2pClient, parent=None):
+    def __init__(self, client, server, p2pClient, loop=None, parent=None):
         """
         FriendsList window contructor
 
@@ -1280,7 +1270,7 @@ class FriendsList(QtGui.QMainWindow):
         # p2p server
         self.server = server
         # asyncio loop
-        self.loop = asyncio.get_event_loop()
+        self.loop = loop or asyncio.get_event_loop()
         # logged in user's profile
         self.profile = self.getProfile()
         # current alias
@@ -1348,8 +1338,7 @@ class FriendsList(QtGui.QMainWindow):
         confirm = messageBox('warning', "Are you sure you want to delete {}?".format(alias),  confirm=True)
 
         if confirm == QtGui.QMessageBox.Yes:
-            delete_friend = asyncio.async(self.client.deleteFriend(mask))
-            self.loop.run_until_complete(delete_friend)
+            self.loop.run_until_complete(self.client.deleteFriend(mask))
             self.drawFriendlist()
 
     def setStatus(self):
@@ -1359,8 +1348,7 @@ class FriendsList(QtGui.QMainWindow):
         selected = self.sender().text().lower()
         status = [k for k, v in STATUSES_BASIC.items() if v == selected][0]
 
-        set_status = asyncio.async(self.client.setStatus(status))
-        success = self.loop.run_until_complete(set_status)
+        success = self.loop.run_until_complete(self.client.setStatus(status))
 
         if success:
             self.status = status
@@ -1386,8 +1374,7 @@ class FriendsList(QtGui.QMainWindow):
         """
         Check for friend requests
         """
-        get_requests = asyncio.async(self.client.getRequests())
-        requests = self.loop.run_until_complete(get_requests)
+        requests = self.loop.run_until_complete(self.client.getRequests())
         if requests:
             try:
                 assert self._friendRequestWindow.isVisible() is True
@@ -1436,8 +1423,7 @@ class FriendsList(QtGui.QMainWindow):
         save = False
         # send auth tokens to server
         for n, token in enumerate(self.server.auth + self.p2pClient.auth):
-            send_token = asyncio.async(self.client.addAuthorisationToken(token=token))
-            success = loop.run_until_complete(send_token)
+            success = loop.run_until_complete(self.client.addAuthorisationToken(token=token))
 
             try:
                 assert success is True
@@ -1465,7 +1451,7 @@ class FriendsList(QtGui.QMainWindow):
         Create profile search window
         """
         # profile search window should never require refocus or reuse
-        self.__profileSearch = ProfileSearchWindow(self.alias, self.client)
+        self.__profileSearch = ProfileSearchWindow(self.alias, self.client, loop=self.loop)
         self.__profileSearch.show()
 
     def settingsWindow(self):
@@ -1529,8 +1515,7 @@ class FriendsList(QtGui.QMainWindow):
         if masks:
             try:
                 # address and status information
-                get_details = asyncio.async(self.client.getDetails(tuple(masks.values())))
-                details = self.loop.run_until_complete(get_details)
+                details = self.loop.run_until_complete(self.client.getDetails(tuple(masks.values())))
             except Exceptions.Unauthorised:
                 # friend has not yet added us, try again in 2 seconds
                 if retry:
@@ -1574,8 +1559,8 @@ class FriendsList(QtGui.QMainWindow):
 
             uids = [u for u, f in self.friends.items() if f.status != STATUS_OFFLINE]
             if uids:
-                send_avatar = asyncio.async(self.p2pClient.sendAvatar(self.__avatar, [u for u, f in self.friends.items() if f.status != STATUS_OFFLINE]))
-                self.loop.run_until_complete(send_avatar)
+                self.loop.run_until_complete(self.p2pClient.sendAvatar(self.__avatar,
+                                                                       [u for u, f in self.friends.items() if f.status != STATUS_OFFLINE]))
 
         # set logged in user's alias
         self.alias = alias if alias else str(self.client.uid)
@@ -1591,8 +1576,7 @@ class FriendsList(QtGui.QMainWindow):
         @param userId: User ID to obtain profile for. None returns logged in user's profile.
         @return: dictionary object containing profile fields and values
         """
-        get_profile = asyncio.async(self.client.getProfile(userId if userId else self.client.uid))
-        profile = self.loop.run_until_complete(get_profile)
+        profile = self.loop.run_until_complete(self.client.getProfile(userId if userId else self.client.uid))
 
         return profile
 
@@ -1608,6 +1592,8 @@ class NewAccount(QtGui.QMainWindow):
         # cleanup on close
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
 
+        self.ui.progressBar.hide()
+        self.background = None
         # set defaults
         self.ui.createAccountFailedLabel.hide()
 
@@ -1651,26 +1637,57 @@ class NewAccount(QtGui.QMainWindow):
             self.reset()
 
             # create new account
-            loop = asyncio.get_event_loop()
             client = ServerClient()
-            new_account = asyncio.async(client.createAccount(self.ui.passphraseLineEdit.text(), self.ui.aliasLineEdit.text()))
-            profileId = loop.run_until_complete(new_account)[0]
+            self.background = Background(client.createAccount(self.ui.passphraseLineEdit.text(), self.ui.aliasLineEdit.text()))
+            self.background.finished.connect(self._login)
+            self.background.start()
 
-            # sign in
-            client, server, p2pClient, reason = signIn(profileId, self.ui.passphraseLineEdit.text())
-            if not reason:
-                # set profile information
-                updateProfile(self.ui, client)
+            self.ui.createAccountButton.setDisabled(True)
+            self.ui.progressBar.show()
 
-                self.openLogin = False
-                # bring up friendList
-                self._ = FriendsList(client, server, p2pClient)
-                self._.show()
-                # get rid of this screen
-                self.close()
-            else:
-                # unable to create account
-                self.ui.createAccountFailedLabel.show()
+    def _login(self):
+        """
+        Login using background worker thread
+        """
+        # required profiled id returned from createAccount() background thread
+        try:
+            profileId = self.background.result[0]
+        except TypeError:
+            self.ui.progressBar.hide()
+            self.ui.createAccountButton.setDisabled(False)
+            self.ui.createAccountFailedLabel.show()
+            return False
+
+        self.background = Background(signIn, arguments=[profileId, self.ui.passphraseLineEdit.text()], isFuture=False)
+        self.background.finished.connect(self._loginFinished)
+        self.background.start()
+
+    def _loginFinished(self):
+        """
+        Post login processing function
+
+        Brings up FriendList on login success, defaults to Login screen on login failure
+        """
+        self.ui.progressBar.hide()
+        self.ui.createAccountButton.setDisabled(False)
+
+        try:
+            client, server, p2pClient, reason, loop = self.background.result
+        except (TypeError, ValueError):
+            # account created, unable to start local services, default to login screen
+            self.close()
+            return
+
+        if not reason:
+            # set profile information
+            updateProfile(self.ui, client, loop=loop)
+
+            self.openLogin = False
+            # bring up friendList
+            self._ = FriendsList(client, server, p2pClient, loop=loop)
+            self._.show()
+
+        self.close()
 
 
 class LoginWindow(QtGui.QMainWindow):
@@ -1681,6 +1698,10 @@ class LoginWindow(QtGui.QMainWindow):
         self.ui.setupUi(self)
         # cleanup on close
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+
+        # ensure progress bar is not shown
+        self.ui.progressBar.hide()
+        self.background = None
 
         # defaults
         self.ui.failedLoginLabel.hide()
@@ -1722,30 +1743,59 @@ class LoginWindow(QtGui.QMainWindow):
         if self.ui.phraseInput.text() == '' or self.ui.profileComboBox.currentText() in ('Select Profile...', ''):
             self.blink(True)
         else:
-            try:
-                client, server, p2pClient, reason = signIn(self.ui.profileComboBox.currentText().split(' ')[0], self.ui.phraseInput.text())
-            except OSError:
+            self.background = Background(signIn,
+                                         arguments=[self.ui.profileComboBox.currentText().split(' ')[0],
+                                                    self.ui.phraseInput.text()],
+                                         isFuture=False)
+            self.background.finished.connect(self._loginFinished)
+            self.background.start()
+
+            # disable UI input options and show progress bar
+            self.ui.profileComboBox.hide()
+            self.ui.phraseInput.hide()
+            self.ui.loginButton.setDisabled(True)
+            self.ui.newAccountButton.setDisabled(True)
+            self.ui.progressBar.show()
+
+    def _loginFinished(self):
+        # renable input options and hide progress bar
+        self.ui.progressBar.hide()
+        self.ui.profileComboBox.show()
+        self.ui.phraseInput.show()
+        self.ui.loginButton.setDisabled(False)
+        self.ui.newAccountButton.setDisabled(False)
+
+        try:
+            client, server, p2pClient, reason, loop = self.background.result
+        except (TypeError, ValueError):
+            error = type(self.background.result)
+            if error is ConnectionRefusedError:
+                self.ui.failedLoginLabel.setText("Quip server temporarily unavailable")
+            elif error is ConnectionError:
+                self.ui.failedLoginLabel.setText("Check internet connection")
+            else:
                 # unable to bind socket
                 self.ui.failedLoginLabel.setText("Unable to start server, try again soon")
-                self.ui.failedLoginLabel.show()
-                return True
 
-            if not reason:
-                # bring up friendList
-                self._ = FriendsList(client, server, p2pClient)
-                self._.show()
-                # get rid of this screen
-                self.close()
-            else:
-                logging.info("Failed login, reason: {}".format(reason))
-                # unable to create account
-                self.ui.failedLoginLabel.setText("Login Failed")
-                self.ui.failedLoginLabel.show()
+            self.ui.failedLoginLabel.show()
+            return True
+
+        if not reason:
+            # bring up friendList
+            self._ = FriendsList(client, server, p2pClient, loop=loop)
+            self._.show()
+            # get rid of this screen
+            self.close()
+        else:
+            logging.info("Failed login, reason: {}".format(reason))
+            # unable to create account
+            self.ui.failedLoginLabel.setText("Login Failed")
+            self.ui.failedLoginLabel.show()
 
 
 if __name__ == "__main__":
     import logging
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
 
     app = QtGui.QApplication(sys.argv)
     if checkCerts():

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'login.ui'
 #
-# Created: Tue Dec 16 15:46:23 2014
+# Created: Sun Jan 25 15:24:57 2015
 #      by: pyside-uic 0.2.15 running on PySide 1.2.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -26,11 +26,14 @@ class Ui_Login(object):
         self.logoLabel.setScaledContents(True)
         self.logoLabel.setObjectName("logoLabel")
         self.layoutWidget = QtGui.QWidget(Login)
-        self.layoutWidget.setGeometry(QtCore.QRect(50, 110, 211, 73))
+        self.layoutWidget.setGeometry(QtCore.QRect(50, 110, 211, 61))
         self.layoutWidget.setObjectName("layoutWidget")
         self.verticalLayout = QtGui.QVBoxLayout(self.layoutWidget)
+        self.verticalLayout.setSpacing(9)
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
         self.verticalLayout.setObjectName("verticalLayout")
+        spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        self.verticalLayout.addItem(spacerItem)
         self.profileComboBox = QtGui.QComboBox(self.layoutWidget)
         self.profileComboBox.setStyleSheet("border-color: rgba(140, 217, 140, 100);\n"
 "border-width: 1px;\n"
@@ -53,6 +56,14 @@ class Ui_Login(object):
         self.phraseInput.setReadOnly(False)
         self.phraseInput.setObjectName("phraseInput")
         self.verticalLayout.addWidget(self.phraseInput)
+        self.progressBar = QtGui.QProgressBar(self.layoutWidget)
+        self.progressBar.setMaximumSize(QtCore.QSize(16777215, 20))
+        self.progressBar.setMaximum(0)
+        self.progressBar.setProperty("value", -1)
+        self.progressBar.setObjectName("progressBar")
+        self.verticalLayout.addWidget(self.progressBar)
+        spacerItem1 = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        self.verticalLayout.addItem(spacerItem1)
         self.layoutWidget1 = QtGui.QWidget(Login)
         self.layoutWidget1.setGeometry(QtCore.QRect(10, 200, 301, 35))
         self.layoutWidget1.setObjectName("layoutWidget1")
@@ -65,8 +76,8 @@ class Ui_Login(object):
         self.newAccountButton.setAutoDefault(False)
         self.newAccountButton.setObjectName("newAccountButton")
         self.horizontalLayout.addWidget(self.newAccountButton)
-        spacerItem = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
-        self.horizontalLayout.addItem(spacerItem)
+        spacerItem2 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+        self.horizontalLayout.addItem(spacerItem2)
         self.loginButton = QtGui.QPushButton(self.layoutWidget1)
         self.loginButton.setFocusPolicy(QtCore.Qt.TabFocus)
         self.loginButton.setStyleSheet("background-color: rgba(140, 217, 140, 100);")

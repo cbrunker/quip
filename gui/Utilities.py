@@ -2,6 +2,7 @@
 # UItility functions used by the Graphic User Interface
 #
 import asyncio
+import logging
 from PySide import QtGui, QtCore
 from lib import Exceptions
 from lib.Client import ServerClient, P2PClient
@@ -23,15 +24,14 @@ def signIn(profileId, phrase):
     if profileId:
         try:
             client = ServerClient(profileId, phrase)
-            login = asyncio.async(client.login(profileId))
-            loop.run_until_complete(login)
+            loop.run_until_complete(client.login(profileId))
             server = runServer(profileId, phrase)
             p2pClient = P2PClient(profileId, phrase)
         except Exceptions.LoginFailure as ex:
             reason = "Login Failed: {}".format(ex)
 
     # run server with default cert locations
-    return client, server, p2pClient, reason
+    return client, server, p2pClient, reason, loop
 
 def bytes2human(nbytes):
     suffixes = ('B', 'KB', 'MB', 'GB', 'TB', 'PB')
@@ -49,7 +49,7 @@ def bytes2human(nbytes):
 def unfade(obj):
     obj.setWindowOpacity(1)
 
-def updateProfile(ui, client):
+def updateProfile(ui, client, loop=None):
     """
     Update profile information for user
 
@@ -65,9 +65,10 @@ def updateProfile(ui, client):
               'country': ui.countryLineEdit.text(),
               'comment': ui.commentLineEdit.text()}
 
-    loop = asyncio.get_event_loop()
-    set_profile = asyncio.async(client.updateProfile(fields))
-    out = loop.run_until_complete(set_profile)
+    if not loop:
+        loop = asyncio.get_event_loop()
+
+    out = loop.run_until_complete(client.updateProfile(fields))
 
     return out
 
@@ -102,3 +103,48 @@ def messageBox(mtype, text, confirm=False):
 
     # load box, return button pressed
     return msgBox.exec_()
+
+
+class Background(QtCore.QThread):
+    """
+    Basic threading worker class to keep UI active
+    """
+
+    def __init__(self, function, arguments=None, isFuture=True, loop=None, parent=None):
+        """
+        Background worker constructor
+
+        @param function: coroutine/future or function to run
+        @param arguments: (Optional) function paramater values - does not work with coroutine
+        @param isFuture: True if coroutine/future, False for function use
+        @param loop: (Optional) Use this loop object instead of creating a new one
+        @param parent: (Optional) QT Parent object
+        """
+        super().__init__(parent)
+
+        self.loop = loop
+        self.function = function
+        self.arguments = arguments or []
+        self.isFuture = isFuture
+        self.exiting = False
+        self.result = None
+
+    def run(self):
+        # loop has to be created and set (set_event_loop) in this thread before the async() future object is created
+        loop = self.loop or asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        if self.isFuture:
+            logging.debug("[Thread {}] Initiating asyncio coroutine".format(self.currentThreadId()))
+            # run coroutine (auto wraps in asyncio.async()) or future
+            self.result = loop.run_until_complete(self.function)
+            logging.debug("[Thread {}] Coroutine complete".format(self.currentThreadId()))
+        else:
+            logging.debug("[Thread {}] Initiating function".format(self.currentThreadId()))
+            # run function with provided arguments
+            try:
+                self.result = self.function(*self.arguments)
+                logging.debug("[Thread {}] Function complete".format(self.currentThreadId()))
+            except Exception as e:
+                self.result = e
+                logging.debug("[Thread {}] Function failed with error: {}".format(self.currentThreadId(), e))

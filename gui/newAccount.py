@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'newAccount.ui'
 #
-# Created: Tue Dec 16 15:46:23 2014
+# Created: Sun Jan 25 15:24:57 2015
 #      by: pyside-uic 0.2.15 running on PySide 1.2.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -73,12 +73,21 @@ class Ui_NewAccount(object):
         self.formLayout.setWidget(6, QtGui.QFormLayout.FieldRole, self.commentLineEdit)
         self.horizontalLayout = QtGui.QHBoxLayout()
         self.horizontalLayout.setObjectName("horizontalLayout")
+        spacerItem = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+        self.horizontalLayout.addItem(spacerItem)
+        self.progressBar = QtGui.QProgressBar(self.centralwidget)
+        self.progressBar.setMinimumSize(QtCore.QSize(200, 0))
+        self.progressBar.setMaximumSize(QtCore.QSize(16777215, 20))
+        self.progressBar.setMaximum(0)
+        self.progressBar.setProperty("value", -1)
+        self.progressBar.setObjectName("progressBar")
+        self.horizontalLayout.addWidget(self.progressBar)
         self.createAccountFailedLabel = QtGui.QLabel(self.centralwidget)
         self.createAccountFailedLabel.setStyleSheet("color: red;")
         self.createAccountFailedLabel.setObjectName("createAccountFailedLabel")
         self.horizontalLayout.addWidget(self.createAccountFailedLabel)
-        spacerItem = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
-        self.horizontalLayout.addItem(spacerItem)
+        spacerItem1 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+        self.horizontalLayout.addItem(spacerItem1)
         self.createAccountButton = QtGui.QToolButton(self.centralwidget)
         self.createAccountButton.setStyleSheet("background-color: rgba(140, 217, 140, 100);")
         icon1 = QtGui.QIcon()
