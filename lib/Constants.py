@@ -50,7 +50,8 @@ COMMAND_LENGTH = 8
 # friend request maximum message length
 FRIEND_REQUEST_LEN = 110
 # Max char limit for profile storage
-LIMIT_PROFILE_VALUES = {'first': 16, 'last': 32, 'alias': 16, 'comment': 128, 'country': 64, 'state': 64, 'city': 64}
+LIMIT_PROFILE_VALUES = {'first': 16, 'last': 32, 'alias': 16, 'comment': 128, 'country': 64, 'state': 64, 'city': 64,
+                        'email': 255}
 # avatar size limit in bytes
 LIMIT_AVATAR_SIZE = 131072
 # age of message being received in seconds
@@ -104,3 +105,8 @@ SERVER = 'quip.im'
 #SERVER_IPv4 = '106.186.28.218'
 SERVER_IPv4 = '127.0.0.1'
 SERVER_PORT = 8822
+
+########
+# URLs
+########
+URL_PATRONAGE = 'https://www.quip.im/patron'

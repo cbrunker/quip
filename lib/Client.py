@@ -18,13 +18,9 @@ from nacl.public import Box, PublicKey, PrivateKey
 from nacl.secret import SecretBox
 from nacl.signing import SigningKey
 
+import lib.Constants as CONS
 from lib.Config import Configuration
 from lib import Exceptions
-
-#################
-# TCP TLS Client
-#################
-import lib.Constants as CONS
 from lib.Containers import Friends, FileRequests, Masks
 from lib.Database import storeAccount, updateAccount, getAccount, getSigningKeys, getUidMask, getAuthority, storeHistory,\
     getFriendAuth, updateAddress, getFriendRequests, setUidMask, setFriendAuth, storeAuthority, storeFriendRequest,\
@@ -32,6 +28,10 @@ from lib.Database import storeAccount, updateAccount, getAccount, getSigningKeys
     delFriendRequests, getAvatar, getMasks, deleteFriend
 from lib.Utils import isValidUUID, sha1sum, encrypt
 
+
+#################
+# TCP TLS Client
+#################
 
 class TLSClient:
     """

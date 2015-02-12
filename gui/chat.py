@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'chat.ui'
 #
-# Created: Tue Dec 16 15:46:23 2014
+# Created: Thu Feb 12 10:59:04 2015
 #      by: pyside-uic 0.2.15 running on PySide 1.2.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -77,6 +77,20 @@ class Ui_Chat(object):
         self.friendVBoxLayout.addWidget(self.friendCommentTextEdit)
         self.friendHBoxLayout.addLayout(self.friendVBoxLayout)
         self.horizontalLayout_5.addLayout(self.friendHBoxLayout)
+        self.patronVBoxLayout = QtGui.QVBoxLayout()
+        self.patronVBoxLayout.setObjectName("patronVBoxLayout")
+        self.patronButton = QtGui.QPushButton(self.friendWidget)
+        self.patronButton.setFocusPolicy(QtCore.Qt.TabFocus)
+        self.patronButton.setStyleSheet("border:none;")
+        self.patronButton.setText("")
+        icon1 = QtGui.QIcon()
+        icon1.addPixmap(QtGui.QPixmap(":/quip/Images/notpatron.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.patronButton.setIcon(icon1)
+        self.patronButton.setObjectName("patronButton")
+        self.patronVBoxLayout.addWidget(self.patronButton)
+        spacerItem = QtGui.QSpacerItem(20, 40, QtGui.QSizePolicy.Minimum, QtGui.QSizePolicy.Expanding)
+        self.patronVBoxLayout.addItem(spacerItem)
+        self.horizontalLayout_5.addLayout(self.patronVBoxLayout)
         self.verticalLayout.addWidget(self.friendWidget)
         self.historyTextBrowser = QtGui.QTextBrowser(self.centralwidget)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
@@ -126,22 +140,22 @@ class Ui_Chat(object):
         self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
         self.horizontalLayout_2.setObjectName("horizontalLayout_2")
         self.emoteToolButton = QtGui.QToolButton(self.chatToolbar)
-        icon1 = QtGui.QIcon()
-        icon1.addPixmap(QtGui.QPixmap(":/quip/Images/emoticons/smile.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.emoteToolButton.setIcon(icon1)
+        icon2 = QtGui.QIcon()
+        icon2.addPixmap(QtGui.QPixmap(":/quip/Images/emoticons/smile.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.emoteToolButton.setIcon(icon2)
         self.emoteToolButton.setAutoRaise(True)
         self.emoteToolButton.setObjectName("emoteToolButton")
         self.horizontalLayout_2.addWidget(self.emoteToolButton)
         self.transferToolButton = QtGui.QToolButton(self.chatToolbar)
-        icon2 = QtGui.QIcon()
-        icon2.addPixmap(QtGui.QPixmap(":/quip/Images/attachment-32x32.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.transferToolButton.setIcon(icon2)
+        icon3 = QtGui.QIcon()
+        icon3.addPixmap(QtGui.QPixmap(":/quip/Images/attachment-32x32.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.transferToolButton.setIcon(icon3)
         self.transferToolButton.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
         self.transferToolButton.setAutoRaise(True)
         self.transferToolButton.setObjectName("transferToolButton")
         self.horizontalLayout_2.addWidget(self.transferToolButton)
-        spacerItem = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
-        self.horizontalLayout_2.addItem(spacerItem)
+        spacerItem1 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+        self.horizontalLayout_2.addItem(spacerItem1)
         self.chatVBoxLayout.addWidget(self.chatToolbar)
         self.chatTextEdit = QtGui.QTextEdit(self.chatWidget)
         sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
@@ -169,9 +183,9 @@ class Ui_Chat(object):
 "border-style: solid;\n"
 "border-radius: 10px;\n"
 "background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 white, stop: 1 rgba(140, 217, 140, 255));")
-        icon3 = QtGui.QIcon()
-        icon3.addPixmap(QtGui.QPixmap(":/quip/Images/send-right-32x32.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
-        self.sendButton.setIcon(icon3)
+        icon4 = QtGui.QIcon()
+        icon4.addPixmap(QtGui.QPixmap(":/quip/Images/send-right-32x32.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.sendButton.setIcon(icon4)
         self.sendButton.setAutoDefault(False)
         self.sendButton.setDefault(False)
         self.sendButton.setFlat(False)

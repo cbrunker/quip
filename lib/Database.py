@@ -214,16 +214,21 @@ def getAccount(safe, profileId):
     except CryptoError:
         return None, None
 
-def setAvatar(safe, profileId, avatar):
+def updateLocalProfile(safe, profileId, avatar=None, alias=None):
     """
-    Set a new avatar for given profile
+    Update profile's locally stored avatar and/or alias
 
     @param safe: crypto box
     @param profileId: profile ID of logged in user
     @param avatar: avatar data to store. If str object, avatar will be taken as a path to a file, otherwise byte data assumed
+    @param alias: logged in user's alias
     """
     con = getCursor()
-    con.execute("UPDATE profiles SET avatar=? WHERE ROWID=?", list(encrypt(safe, avatar)) + [profileId])
+    if avatar:
+        con.execute("UPDATE profiles SET avatar=? WHERE ROWID=?", list(encrypt(safe, avatar)) + [profileId])
+
+    if alias:
+        con.execute("UPDATE profiles SET alias=? WHERE ROWID=?", [alias, profileId])
 
 def getAvatar(safe, profileId):
     """

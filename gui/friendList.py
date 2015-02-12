@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'friendList.ui'
 #
-# Created: Tue Dec 16 15:46:23 2014
+# Created: Thu Feb 12 10:59:04 2015
 #      by: pyside-uic 0.2.15 running on PySide 1.2.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -137,6 +137,11 @@ class Ui_FriendList(object):
         self.actionDeleteFriend.setObjectName("actionDeleteFriend")
         self.actionTransfers = QtGui.QAction(FriendList)
         self.actionTransfers.setObjectName("actionTransfers")
+        self.actionPatron = QtGui.QAction(FriendList)
+        icon4 = QtGui.QIcon()
+        icon4.addPixmap(QtGui.QPixmap(":/quip/Images/notpatron.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.actionPatron.setIcon(icon4)
+        self.actionPatron.setObjectName("actionPatron")
         self.menuFile.addAction(self.actionTransfers)
         self.menuFile.addSeparator()
         self.menuFile.addAction(self.actionQuit)
@@ -150,6 +155,7 @@ class Ui_FriendList(object):
         self.menubar.addAction(self.menuFriends.menuAction())
         self.menubar.addAction(self.menuStatus.menuAction())
         self.toolBar.addAction(self.actionSettings)
+        self.toolBar.addAction(self.actionPatron)
         self.toolBar.addAction(self.actionFriendAdd)
 
         self.retranslateUi(FriendList)
@@ -187,6 +193,9 @@ class Ui_FriendList(object):
         self.actionDeleteFriend.setText(QtGui.QApplication.translate("FriendList", "Delete", None, QtGui.QApplication.UnicodeUTF8))
         self.actionTransfers.setText(QtGui.QApplication.translate("FriendList", "File Transfers", None, QtGui.QApplication.UnicodeUTF8))
         self.actionTransfers.setShortcut(QtGui.QApplication.translate("FriendList", "Ctrl+T", None, QtGui.QApplication.UnicodeUTF8))
+        self.actionPatron.setText(QtGui.QApplication.translate("FriendList", "Patronage", None, QtGui.QApplication.UnicodeUTF8))
+        self.actionPatron.setIconText(QtGui.QApplication.translate("FriendList", "Patronage", None, QtGui.QApplication.UnicodeUTF8))
+        self.actionPatron.setToolTip(QtGui.QApplication.translate("FriendList", "Patronage", None, QtGui.QApplication.UnicodeUTF8))
 
 from . import quip_qt_rc
 from . import quip_qt_rc

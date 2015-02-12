@@ -20,7 +20,7 @@ from gui.friendRequest import Ui_FriendRequest
 from gui.profileView import Ui_ProfileView
 from gui.Resources import FLAGS, EMOTE_PATTERN, EMOTICONS, RESOURCE_PATTERN, EMOTICON_RESOURCES, URL_PATTERN, Friend, \
     EXT, MIMETYPES
-from gui.Utilities import updateProfile, signIn, messageBox, bytes2human, Background
+from gui.Utilities import updateRemoteProfile, signIn, messageBox, bytes2human, Background, emailValidation, patronWebsite
 from gui.emoticons import Ui_Emoticons
 from gui.settings import Ui_Settings
 from lib.Config import Configuration
@@ -29,7 +29,7 @@ from lib.Constants import STATUS_OFFLINE, STATUS_INVISIBLE, STATUS_AWAY, STATUS_
     LIMIT_PROFILE_VALUES
 from lib.Utils import isValidUUID, checkCerts
 from lib.Client import ServerClient
-from lib.Database import getProfiles, getAvatar, getFriends, getMasks, setAvatar, delFileRequests
+from lib.Database import getProfiles, getAvatar, getFriends, getMasks, updateLocalProfile, delFileRequests
 from lib.Countries import COUNTRIES
 
 # inbuilt modules
@@ -42,6 +42,7 @@ from hashlib import sha1
 from ipaddress import ip_interface
 from random import randint
 from functools import partial
+from time import time
 
 # third-party modules
 from PySide import QtCore, QtGui
@@ -340,7 +341,7 @@ class FileTransferWindow(QtGui.QMainWindow):
         QtGui.QDesktopServices.openUrl(QtCore.QUrl("file://{}".format(filePath), QtCore.QUrl.TolerantMode))
 
 class ProfileView(QtGui.QMainWindow):
-    def __init__(self, avatar, profile, client=None, p2pclient=None, callback=None, parent=None):
+    def __init__(self, avatar, profile, client=None, p2pclient=None, callback=None, loop=None, parent=None):
         """
         Display profile data
 
@@ -354,6 +355,7 @@ class ProfileView(QtGui.QMainWindow):
         self.ui =  Ui_ProfileView()
         self.ui.setupUi(self)
 
+        self.loop = loop or asyncio.get_event_loop()
         self.profile = profile
         self.client = client
         self.p2pclient = p2pclient
@@ -367,11 +369,13 @@ class ProfileView(QtGui.QMainWindow):
                           self.ui.commentLineEdit: 'comment',
                           self.ui.cityLineEdit: 'city',
                           self.ui.stateLineEdit: 'state',
-                          self.ui.countryLineEdit: 'country'}
+                          self.ui.countryLineEdit: 'country',
+                          self.ui.emailLineEdit: 'email'}
 
         # signals and slots
         self.ui.addAvatarButton.clicked.connect(self.newAvatar)
         self.ui.saveButton.clicked.connect(self.saveProfile)
+        self.ui.patronButton.clicked.connect(patronWebsite)
         self.ui.profileLabel.setFocus()
 
         self.drawProfile()
@@ -386,6 +390,9 @@ class ProfileView(QtGui.QMainWindow):
             self.ui.avatarLabel.setPixmap(self.avatar)
 
     def saveProfile(self):
+        """
+        Save any profile changes
+        """
         # save any avatar changes
         if self.avatar:
             ba = QtCore.QByteArray()
@@ -394,7 +401,9 @@ class ProfileView(QtGui.QMainWindow):
             data = ba.data()
 
             # save locally
-            setAvatar(self.client.safe, self.client.profileId, data)
+            updateLocalProfile(self.client.safe, self.client.profileId, data, self.ui.aliasLineEdit.text())
+            # send profile changes to server
+            updateRemoteProfile(self.ui, self.client, loop=self.loop)
 
         # will call drawProfile() for friendList avatar redraw
         self.callback()
@@ -407,18 +416,43 @@ class ProfileView(QtGui.QMainWindow):
         if self.avatar:
             self.ui.avatarLabel.setPixmap(self.avatar)
 
+        hasPatron = False
+
         if self.client:
+            # viewing our own profile
             for w in self.reference.keys():
                 w.setReadOnly(False)
                 w.setFocusPolicy(QtCore.Qt.StrongFocus)
 
             self.ui.useridLabelText.setText(self.client.uid.decode('ascii'))
             alias = self.profile['alias'] or self.client.uid.decode('ascii')
+            self.ui.patronTimeLabel.setText(datetime.fromtimestamp(float(self.profile['patron'])).strftime('%I:%M%p %dth %b %y UTC'))
+
+            if (float(self.profile['patron']) - time()) > 0:
+                hasPatron = True
+
         else:
+            # viewing friend/contact profile
+            # do not show email area for friends
+            self.ui.emailLabel.hide()
+            self.ui.emailLineEdit.hide()
+            # do not show patron end time for friends
+            self.ui.patronTimeLabel.hide()
+            # ensure mutable options are disabled or hidden
             self.ui.addAvatarButton.hide()
             self.ui.saveButton.hide()
+            # add alias and ID information
             self.ui.useridLabelText.setText(self.profile['uid'])
             alias = self.profile['alias'] or self.profile['uid']
+
+            # display patron star if patron status confirmed
+            if int(self.profile['patron']) > 0:
+                hasPatron = True
+
+        if hasPatron:
+            patronIcon = QtGui.QIcon()
+            patronIcon.addPixmap(QtGui.QPixmap(":/quip/Images/patron.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+            self.ui.patronButton.setIcon(patronIcon)
 
         self.ui.useridLabelText.setTextInteractionFlags(QtCore.Qt.TextSelectableByMouse)
         self.ui.profileLabel.setText("{}'s Profile".format(alias))
@@ -890,7 +924,7 @@ class EmoticonWindow(QtGui.QWidget):
         self.callback(icon.toolTip())
 
 class ChatWindow(QtGui.QMainWindow):
-    def __init__(self, alias, friend, p2pClient, client, callback, serverCallback, parent=None):
+    def __init__(self, alias, friend, profile, p2pClient, client, callback, serverCallback, parent=None):
         super().__init__(parent)
         self.ui =  Ui_Chat()
         self.ui.setupUi(self)
@@ -899,6 +933,8 @@ class ChatWindow(QtGui.QMainWindow):
         self.alias = alias
         # friend object of chat window
         self.friend = friend
+        # friend's profile
+        self.profile = profile
         # p2p client for p2p communication
         self.p2pClient = p2pClient
         # server client (address lookup)
@@ -957,6 +993,12 @@ class ChatWindow(QtGui.QMainWindow):
 
         self._emoteWindow = None
 
+        # check if friend/contact has patron status
+        if int(self.profile['patron']) > 0:
+            patronIcon = QtGui.QIcon()
+            patronIcon.addPixmap(QtGui.QPixmap(":/quip/Images/patron.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+            self.ui.patronButton.setIcon(patronIcon)
+
         ####################
         # Signal connectors
         ####################
@@ -965,6 +1007,7 @@ class ChatWindow(QtGui.QMainWindow):
         self.ui.emoteToolButton.clicked.connect(self.emoticonWindow)
         #self.ui.chatTextEdit.returnPressed.connect(self.sendMessage)
         self.ui.transferToolButton.clicked.connect(self.selectTransferFile)
+        self.ui.patronButton.clicked.connect(patronWebsite)
 
         # ui customisation
         self.setDetails()
@@ -1288,11 +1331,20 @@ class FriendsList(QtGui.QMainWindow):
         # every 5 seconds
         self.timer.start(5000)
 
-        # additional UI setup
-        self.ui.spacerWidget = QtGui.QWidget()
-        self.ui.spacerWidget.setSizePolicy(QtGui.QSizePolicy.Expanding,QtGui.QSizePolicy.Expanding)
-        self.ui.toolBar.insertWidget(self.ui.actionFriendAdd, self.ui.spacerWidget)
+        ######################
+        # Additional UI setup
+        ######################
+
+        # correctly space out buttons on the toolbar
+        self.ui.spacerWidgetLeft = QtGui.QWidget()
+        self.ui.spacerWidgetLeft.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        self.ui.toolBar.insertWidget(self.ui.actionFriendAdd, self.ui.spacerWidgetLeft)
+        self.ui.spacerWidgetRight = QtGui.QWidget()
+        self.ui.spacerWidgetRight.setSizePolicy(QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Expanding)
+        self.ui.toolBar.insertWidget(self.ui.actionPatron, self.ui.spacerWidgetRight)
+
         self.setAvatarStatus()
+        self.checkPatronStatus()
 
         # drawing profile first avoids sending avatar to friends as self.friends has not yet been populated
         self.drawProfile()
@@ -1306,6 +1358,7 @@ class FriendsList(QtGui.QMainWindow):
         self.ui.friendsListView.addAction(self.ui.actionDeleteFriend)
         self.ui.actionFriendAdd.triggered.connect(self.profileSearch)
         self.ui.actionSearchProfiles.triggered.connect(self.profileSearch)
+        self.ui.actionPatron.triggered.connect(self.openPatronWebsite)
         self.ui.actionSettings.triggered.connect(self.settingsWindow)
         self.ui.actionTransfers.triggered.connect(self.showTransferWindow)
         self.ui.actionQuit.triggered.connect(self.shutdown)
@@ -1318,6 +1371,20 @@ class FriendsList(QtGui.QMainWindow):
         # ensure the focus is originally on avatar
         self.ui.avatarLabel.setFocus()
 
+    def checkPatronStatus(self, refreshProfile=False):
+        """
+        Checks logged in user's patron status and updates patron star button
+        """
+        # obtain profile from server
+        if refreshProfile:
+            self.profile = self.getProfile()
+
+        if (float(self.profile['patron']) - time()) > 0:
+            patronIcon = QtGui.QIcon()
+            patronIcon.addPixmap(QtGui.QPixmap(":/quip/Images/patron.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+            self.ui.actionPatron.setIcon(patronIcon)
+
+
     def closeEvent(self, event):
         self.p2pClient.shutdown()
         self.server.stop(self.loop)
@@ -1329,7 +1396,9 @@ class FriendsList(QtGui.QMainWindow):
     def mouseDoubleClickEvent(self, ev, **kwargs):
         # react to doubleclick in avatar location
         if 3 < ev.x() < 72 and 30 < ev.y() < 120:
-            self._profileView = ProfileView(self.ui.avatarLabel.pixmap(), self.profile, self.client, self.p2pClient, self.drawProfile)
+            self.profile = self.getProfile()
+            self._profileView = ProfileView(self.ui.avatarLabel.pixmap(), self.profile, self.client, self.p2pClient,
+                                            self.drawProfile, self.loop)
             self._profileView.show()
         return True
 
@@ -1399,7 +1468,7 @@ class FriendsList(QtGui.QMainWindow):
                 w = getattr(self, mask)
             except AttributeError:
                 f = self.friends[uid]
-                setattr(self, f.mask, ChatWindow(self.alias, f, self.p2pClient, self.client,
+                setattr(self, f.mask, ChatWindow(self.alias, f, self.getProfile(uid), self.p2pClient, self.client,
                                                  self.fileTransferWindow, self.server.fileRequestsOut.reload))
                 w = getattr(self, mask)
 
@@ -1454,6 +1523,13 @@ class FriendsList(QtGui.QMainWindow):
         self.__profileSearch = ProfileSearchWindow(self.alias, self.client, loop=self.loop)
         self.__profileSearch.show()
 
+    def openPatronWebsite(self):
+        """
+        Open Patron URL
+        """
+        self.checkPatronStatus(refreshProfile=True)
+        patronWebsite()
+
     def settingsWindow(self):
         """
         Create and show settings window
@@ -1505,7 +1581,7 @@ class FriendsList(QtGui.QMainWindow):
             w.raise_()
         except AttributeError:
             # create new chat window for friend
-            setattr(self, friend.mask, ChatWindow(self.alias, friend, self.p2pClient, self.client,
+            setattr(self, friend.mask, ChatWindow(self.alias, friend, self.getProfile(friend.uid), self.p2pClient, self.client,
                                                   self.fileTransferWindow, self.server.fileRequests.reload))
             w = getattr(self, friend.mask)
             w.show()
@@ -1550,6 +1626,14 @@ class FriendsList(QtGui.QMainWindow):
         """
         # logged in profile alias and avatar setup
         self.__avatar, alias = getAvatar(self.client.safe, self.client.profileId)
+
+        # set logged in user's alias
+        self.alias = alias if alias else str(self.client.uid)
+
+        # add alias and profile comment to profile view
+        self.ui.aliasLineEdit.setText(self.alias)
+        self.ui.commentTextEdit.setHtml("""<html><head/><body><p><span style=" color:{};">{}</span></p></body></html>""".format(self.commentColour, self.profile['comment']))
+
         if self.__avatar:
             # direct byte data must be loaded with loadFromData, not through the contructor's data signature option (uchar)
             avatar = QtGui.QImage()
@@ -1561,13 +1645,6 @@ class FriendsList(QtGui.QMainWindow):
             if uids:
                 self.loop.run_until_complete(self.p2pClient.sendAvatar(self.__avatar,
                                                                        [u for u, f in self.friends.items() if f.status != STATUS_OFFLINE]))
-
-        # set logged in user's alias
-        self.alias = alias if alias else str(self.client.uid)
-
-        # add alias and profile comment to profile view
-        self.ui.aliasLineEdit.setText(self.alias)
-        self.ui.commentTextEdit.setHtml("""<html><head/><body><p><span style=" color:{};">{}</span></p></body></html>""".format(self.commentColour, self.profile['comment']))
 
     def getProfile(self, userId=None):
         """
@@ -1601,12 +1678,15 @@ class NewAccount(QtGui.QMainWindow):
         self.ui.createAccountButton.clicked.connect(self.createAccount)
         self.ui.passphraseLineEdit.selectionChanged.connect(self.reset)
         self.ui.passphraseLineEdit.returnPressed.connect(self.createAccount)
+        self.ui.emailLineEdit.selectionChanged.connect(self.reset)
 
         # whether to open login screen when window closes
         self.openLogin = True
 
-        self.origSytle = self.ui.passphraseLineEdit.styleSheet()
-        self.origText = self.ui.passphraseLineEdit.placeholderText()
+        self.origStylePhrase = self.ui.passphraseLineEdit.styleSheet()
+        self.origTextPhrase = self.ui.passphraseLineEdit.placeholderText()
+        self.origStyleEmail = self.ui.emailLineEdit.styleSheet()
+        self.origTextEmail = self.ui.emailLineEdit.placeholderText()
 
     def closeEvent(self, event):
         """
@@ -1621,8 +1701,13 @@ class NewAccount(QtGui.QMainWindow):
         """
         Reset passphrase placeholder text and stylesheet
         """
-        self.ui.passphraseLineEdit.setStyleSheet(self.origSytle)
-        self.ui.passphraseLineEdit.setPlaceholderText(self.origText)
+        if self.ui.passphraseLineEdit.placeholderText() != self.origTextPhrase:
+            self.ui.passphraseLineEdit.setStyleSheet(self.origStylePhrase)
+            self.ui.passphraseLineEdit.setPlaceholderText(self.origTextPhrase)
+
+        if self.ui.emailLineEdit.placeholderText() != self.origTextEmail:
+            self.ui.emailLineEdit.setStyleSheet(self.origStyleEmail)
+            self.ui.emailLineEdit.setPlaceholderText(self.origTextEmail)
 
     def createAccount(self):
         """
@@ -1632,6 +1717,13 @@ class NewAccount(QtGui.QMainWindow):
             self.ui.passphraseLineEdit.setText("")
             self.ui.passphraseLineEdit.setPlaceholderText("Passphrase must be at least 8 characters long")
             self.ui.passphraseLineEdit.setStyleSheet("background-color: rgba(225, 33, 33, 100);")
+            self.ui.commentLineEdit.setFocus()
+        elif len(self.ui.emailLineEdit.text().strip()) and not emailValidation(self.ui.emailLineEdit.text().strip()):
+            self.reset()
+            # entered email is invalid
+            self.ui.emailLineEdit.setText("")
+            self.ui.emailLineEdit.setPlaceholderText("Invalid e-mail address")
+            self.ui.emailLineEdit.setStyleSheet("background-color: rgba(225, 33, 33, 100);")
             self.ui.commentLineEdit.setFocus()
         else:
             self.reset()
@@ -1680,7 +1772,7 @@ class NewAccount(QtGui.QMainWindow):
 
         if not reason:
             # set profile information
-            updateProfile(self.ui, client, loop=loop)
+            updateRemoteProfile(self.ui, client, loop=loop)
 
             self.openLogin = False
             # bring up friendList

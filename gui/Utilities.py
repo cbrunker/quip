@@ -6,6 +6,7 @@ import logging
 from PySide import QtGui, QtCore
 from lib import Exceptions
 from lib.Client import ServerClient, P2PClient
+from lib.Constants import URL_PATRONAGE
 from lib.Server import runServer
 
 
@@ -42,6 +43,18 @@ def bytes2human(nbytes):
         i += 1
     return ' '.join((('%.2f' % nbytes).rstrip('0').rstrip('.'), suffixes[i]))
 
+def emailValidation(email):
+    """
+    Basic email validation
+
+    @param email: text to validate
+    @return: Boolean value based on validity
+    """
+    if email.count('@') == 1 and len(email.split('.')) > 1 and '@' in email.split('.')[0] and len(email) <= 255:
+        return True
+    else:
+        return False
+
 ###############
 # QT4 specific
 ###############
@@ -49,7 +62,7 @@ def bytes2human(nbytes):
 def unfade(obj):
     obj.setWindowOpacity(1)
 
-def updateProfile(ui, client, loop=None):
+def updateRemoteProfile(ui, client, loop=None):
     """
     Update profile information for user
 
@@ -63,7 +76,8 @@ def updateProfile(ui, client, loop=None):
               'city': ui.cityLineEdit.text(),
               'state': ui.stateLineEdit.text(),
               'country': ui.countryLineEdit.text(),
-              'comment': ui.commentLineEdit.text()}
+              'comment': ui.commentLineEdit.text(),
+              'email': ui.emailLineEdit.text().strip()}
 
     if not loop:
         loop = asyncio.get_event_loop()
@@ -71,6 +85,14 @@ def updateProfile(ui, client, loop=None):
     out = loop.run_until_complete(client.updateProfile(fields))
 
     return out
+
+def patronWebsite(userId=None):
+    """
+    Open Patron URL
+
+    @param userId: user ID to provide patronage for
+    """
+    QtGui.QDesktopServices.openUrl(QtCore.QUrl(URL_PATRONAGE, QtCore.QUrl.StrictMode))
 
 #######################
 # Custom UI components
