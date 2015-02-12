@@ -372,13 +372,25 @@ class ProfileView(QtGui.QMainWindow):
                           self.ui.countryLineEdit: 'country',
                           self.ui.emailLineEdit: 'email'}
 
+        self.origStyleEmail = self.ui.emailLineEdit.styleSheet()
+        self.origTextEmail = self.ui.emailLineEdit.placeholderText()
+
         # signals and slots
         self.ui.addAvatarButton.clicked.connect(self.newAvatar)
         self.ui.saveButton.clicked.connect(self.saveProfile)
         self.ui.patronButton.clicked.connect(patronWebsite)
+        self.ui.emailLineEdit.selectionChanged.connect(self.reset)
         self.ui.profileLabel.setFocus()
 
         self.drawProfile()
+
+    def reset(self):
+        """
+        Reset email placeholder text and stylesheet
+        """
+        if self.ui.emailLineEdit.placeholderText() != self.origTextEmail:
+            self.ui.emailLineEdit.setStyleSheet(self.origStyleEmail)
+            self.ui.emailLineEdit.setPlaceholderText(self.origTextEmail)
 
     def newAvatar(self):
         avatar = QtGui.QFileDialog.getOpenFileName(self, "Open Image", '', "Image Files (*.png *.jpg *.bmp)")[0]
@@ -393,21 +405,32 @@ class ProfileView(QtGui.QMainWindow):
         """
         Save any profile changes
         """
-        # save any avatar changes
-        if self.avatar:
-            ba = QtCore.QByteArray()
-            buffer = QtCore.QBuffer(ba)
-            self.avatar.save(buffer, 'PNG')
-            data = ba.data()
+        if len(self.ui.emailLineEdit.text().strip()) and not emailValidation(self.ui.emailLineEdit.text().strip()):
+            self.reset()
+            # entered email is invalid
+            self.ui.emailLineEdit.setText("")
+            self.ui.emailLineEdit.setPlaceholderText("Invalid e-mail address")
+            self.ui.emailLineEdit.setStyleSheet("background-color: rgba(225, 33, 33, 100);")
+            self.ui.commentLineEdit.setFocus()
+        else:
+            # save any avatar changes
+            if self.avatar:
+                ba = QtCore.QByteArray()
+                buffer = QtCore.QBuffer(ba)
+                self.avatar.save(buffer, 'PNG')
+                data = ba.data()
 
-            # save locally
-            updateLocalProfile(self.client.safe, self.client.profileId, data, self.ui.aliasLineEdit.text())
+                # save locally
+                updateLocalProfile(self.client.safe, self.client.profileId, data, self.ui.aliasLineEdit.text())
+            else:
+                updateLocalProfile(self.client.safe, self.client.profileId, alias=self.ui.aliasLineEdit.text())
+
             # send profile changes to server
             updateRemoteProfile(self.ui, self.client, loop=self.loop)
 
-        # will call drawProfile() for friendList avatar redraw
-        self.callback()
-        self.close()
+            # will call drawProfile() for friendList avatar redraw
+            self.callback()
+            self.close()
 
     def drawProfile(self):
         for widget, field in self.reference.items():
@@ -1699,7 +1722,7 @@ class NewAccount(QtGui.QMainWindow):
 
     def reset(self):
         """
-        Reset passphrase placeholder text and stylesheet
+        Reset passphrase/email placeholder text and stylesheet
         """
         if self.ui.passphraseLineEdit.placeholderText() != self.origTextPhrase:
             self.ui.passphraseLineEdit.setStyleSheet(self.origStylePhrase)
