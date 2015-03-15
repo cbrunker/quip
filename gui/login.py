@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'login.ui'
 #
-# Created: Sun Jan 25 15:24:57 2015
+# Created: Mon Mar  9 11:21:34 2015
 #      by: pyside-uic 0.2.15 running on PySide 1.2.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -26,7 +26,7 @@ class Ui_Login(object):
         self.logoLabel.setScaledContents(True)
         self.logoLabel.setObjectName("logoLabel")
         self.layoutWidget = QtGui.QWidget(Login)
-        self.layoutWidget.setGeometry(QtCore.QRect(50, 110, 211, 61))
+        self.layoutWidget.setGeometry(QtCore.QRect(50, 110, 211, 100))
         self.layoutWidget.setObjectName("layoutWidget")
         self.verticalLayout = QtGui.QVBoxLayout(self.layoutWidget)
         self.verticalLayout.setSpacing(9)
@@ -39,7 +39,8 @@ class Ui_Login(object):
 "border-width: 1px;\n"
 "border-radius: 5px;\n"
 "border-style: solid;\n"
-"background-color: qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: 0 white, stop: 1 rgba(140, 217, 140, 255));")
+"color: black;\n"
+"")
         self.profileComboBox.setIconSize(QtCore.QSize(16, 16))
         self.profileComboBox.setFrame(False)
         self.profileComboBox.setObjectName("profileComboBox")
@@ -91,6 +92,21 @@ class Ui_Login(object):
         self.failedLoginLabel.setStyleSheet("color: red;")
         self.failedLoginLabel.setAlignment(QtCore.Qt.AlignCenter)
         self.failedLoginLabel.setObjectName("failedLoginLabel")
+        self.recoveryButton = QtGui.QPushButton(Login)
+        self.recoveryButton.setGeometry(QtCore.QRect(270, 130, 32, 32))
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.recoveryButton.sizePolicy().hasHeightForWidth())
+        self.recoveryButton.setSizePolicy(sizePolicy)
+        self.recoveryButton.setStyleSheet("border: none;")
+        self.recoveryButton.setText("")
+        icon1 = QtGui.QIcon()
+        icon1.addPixmap(QtGui.QPixmap(":/quip/Images/recover-unlock-32x32.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.recoveryButton.setIcon(icon1)
+        self.recoveryButton.setIconSize(QtCore.QSize(32, 32))
+        self.recoveryButton.setFlat(True)
+        self.recoveryButton.setObjectName("recoveryButton")
 
         self.retranslateUi(Login)
         self.profileComboBox.setCurrentIndex(0)
@@ -104,5 +120,6 @@ class Ui_Login(object):
         self.newAccountButton.setText(QtGui.QApplication.translate("Login", "New Account", None, QtGui.QApplication.UnicodeUTF8))
         self.loginButton.setText(QtGui.QApplication.translate("Login", "Login", None, QtGui.QApplication.UnicodeUTF8))
         self.failedLoginLabel.setText(QtGui.QApplication.translate("Login", "Login Failed", None, QtGui.QApplication.UnicodeUTF8))
+        self.recoveryButton.setToolTip(QtGui.QApplication.translate("Login", "Recover Account", None, QtGui.QApplication.UnicodeUTF8))
 
 from . import quip_qt_rc

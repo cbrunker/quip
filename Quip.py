@@ -18,11 +18,12 @@ from gui.newAccount import Ui_NewAccount
 from gui.friendList import Ui_FriendList
 from gui.friendRequest import Ui_FriendRequest
 from gui.profileView import Ui_ProfileView
+from gui.accountRecovery import Ui_AccountRecovery
+from gui.emoticons import Ui_Emoticons
+from gui.settings import Ui_Settings
 from gui.Resources import FLAGS, EMOTE_PATTERN, EMOTICONS, RESOURCE_PATTERN, EMOTICON_RESOURCES, URL_PATTERN, Friend, \
     EXT, MIMETYPES
 from gui.Utilities import updateRemoteProfile, signIn, messageBox, bytes2human, Background, emailValidation, patronWebsite
-from gui.emoticons import Ui_Emoticons
-from gui.settings import Ui_Settings
 from lib.Config import Configuration
 from lib import Exceptions
 from lib.Constants import STATUS_OFFLINE, STATUS_INVISIBLE, STATUS_AWAY, STATUS_ONLINE, STATUS_BUSY, STATUSES_BASIC, \
@@ -1680,6 +1681,162 @@ class FriendsList(QtGui.QMainWindow):
 
         return profile
 
+class AccountRecovery(QtGui.QMainWindow):
+    """
+    Account Recovery Window
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.ui = Ui_AccountRecovery()
+        self.ui.setupUi(self)
+
+        # server-client interaction objects
+        self.client = ServerClient()
+        # background worker
+        self.background = None
+        # recovery code storage
+        self.code = None
+
+        # set defaults
+        self.ui.emailProgressBar.hide()
+        self.ui.recoveryProgressBar.hide()
+        self.ui.phraseProgressBar.hide()
+        # set focus
+        self.ui.unlockLabel.setFocus()
+
+        # cleanup on close
+        self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+
+        # connect slots and signals
+        self.ui.nextButton.clicked.connect(self.emailPage)
+        self.ui.recoveryButton.clicked.connect(self.submitCode)
+        self.ui.phraseButton.clicked.connect(self.submitPhrase)
+        self.ui.emailLineEdit.selectionChanged.connect(self.reset)
+        self.ui.recoveryCodeLineEdit.selectionChanged.connect(self.reset)
+        self.ui.passphraseLineEdit.selectionChanged.connect(self.reset)
+        self.ui.helpButton.clicked.connect(partial(messageBox, 'info', 'Recovery code(s) are sent to the entered email account'))
+
+        # original text and style
+        self.origStyleEmail = self.ui.emailLineEdit.styleSheet()
+        self.origTextEmail = self.ui.emailLineEdit.placeholderText()
+        self.origStyleCode = self.ui.recoveryCodeLineEdit.styleSheet()
+        self.origTextCode = self.ui.recoveryCodeLineEdit.placeholderText()
+        self.origStylePhrase = self.ui.passphraseLineEdit.styleSheet()
+        self.origTextPhrase = self.ui.passphraseLineEdit.placeholderText()
+
+    def closeEvent(self, event):
+        """
+        Create login screen on close
+        """
+        self._ = LoginWindow()
+        self._.show()
+
+        self.close()
+
+    def reset(self):
+        """
+        Reset stylesheets and placeholder text for line edits
+        """
+        if self.ui.emailLineEdit.placeholderText() != self.origTextEmail:
+            self.ui.emailLineEdit.setStyleSheet(self.origStyleEmail)
+            self.ui.emailLineEdit.setPlaceholderText(self.origTextEmail)
+
+        if self.ui.recoveryCodeLineEdit.placeholderText() != self.origTextCode:
+            self.ui.recoveryCodeLineEdit.setStyleSheet(self.origStyleCode)
+            self.ui.recoveryCodeLineEdit.setPlaceholderText(self.origTextCode)
+
+        if self.ui.passphraseLineEdit.placeholderText() != self.origTextPhrase:
+            self.ui.passphraseLineEdit.setStyleSheet(self.origStylePhrase)
+            self.ui.passphraseLineEdit.setPlaceholderText(self.origTextPhrase)
+
+    def submitEmail(self, email):
+        """
+        Request recovery code
+
+        @param email: email address to submit
+        """
+        if email:
+            # create new account
+            self.background = Background(self.client.emailRecovery(email))
+            # change to Recovery / code page when completed
+            self.background.finished.connect(partial(self.ui.stackedWidget.setCurrentIndex, 1))
+            self.background.start()
+
+            # show progress bar
+            self.ui.emailProgressBar.show()
+            # disable Next button
+            self.ui.nextButton.setDisabled(True)
+
+    def emailPage(self):
+        """
+        Accept email input
+        """
+        email = self.ui.emailLineEdit.text().strip()
+        # check for entered e-mail
+        if email:
+            # validate email
+            if emailValidation(email):
+                # send request to server, submitEmail handles showing next page
+                self.submitEmail(email)
+            else:
+                self.ui.emailLineEdit.setText("")
+                self.ui.emailLineEdit.setPlaceholderText("Invalid e-mail address")
+                self.ui.emailLineEdit.setStyleSheet("background-color: rgba(225, 33, 33, 100);")
+                self.ui.unlockLabel.setFocus()
+        else:
+            # no email entered, bring up recovery page
+            self.ui.stackedWidget.setCurrentIndex(1)
+            self.ui.recoveryCodeLabel.setFocus()
+
+    def submitCode(self):
+        """
+        Submit recovery code
+        """
+        code = self.ui.recoveryCodeLineEdit.text().strip()
+        if isValidUUID(code):
+            self.code = code
+            # go to phrase page
+            self.ui.stackedWidget.setCurrentIndex(2)
+        else:
+            self.ui.recoveryCodeLineEdit.setText("")
+            self.ui.recoveryCodeLineEdit.setPlaceholderText("Invalid recovery code")
+            self.ui.recoveryCodeLineEdit.setStyleSheet("background-color: rgba(225, 33, 33, 100);")
+            self.ui.helpButton.setFocus()
+
+    def submitPhrase(self):
+        """
+        Submit account phrase
+        """
+        if 32 > len(self.ui.passphraseLineEdit.text()) < 8:
+            self.ui.passphraseLineEdit.setText("")
+            self.ui.passphraseLineEdit.setPlaceholderText("Passphrase must be at least 8 characters long")
+            self.ui.passphraseLineEdit.setStyleSheet("background-color: rgba(225, 33, 33, 100);")
+            self.ui.passphraseIconLabel.setFocus()
+        else:
+            # attempt account recovery
+            self.background = Background(self.client.accountRecovery(self.code, self.ui.passphraseLineEdit.text()))
+            self.background.finished.connect(self.recoveryResponse)
+            self.background.start()
+
+            # show progress bar
+            self.ui.phraseProgressBar.show()
+            # disable Recover button
+            self.ui.phraseButton.setDisabled(True)
+
+    def recoveryResponse(self):
+        """
+        Handle client account recovery response
+        """
+        # check recovery response
+        if self.background.result:
+            messageBox('info', 'Account recovery successful!')
+        else:
+            messageBox('error', 'Invalid recovery code')
+
+        self.close()
+
+
 class NewAccount(QtGui.QMainWindow):
     """
     New Account Creation Form
@@ -1718,6 +1875,7 @@ class NewAccount(QtGui.QMainWindow):
         if self.openLogin:
             self._ = LoginWindow()
             self._.show()
+
         self.close()
 
     def reset(self):
@@ -1820,9 +1978,12 @@ class LoginWindow(QtGui.QMainWindow):
 
         # defaults
         self.ui.failedLoginLabel.hide()
+        self.ui.recoveryButton.hide()
+
         # connect slots and signals
         self.ui.phraseInput.returnPressed.connect(self.login)
         self.ui.loginButton.clicked.connect(self.login)
+        self.ui.recoveryButton.clicked.connect(self.recovery)
         self.ui.newAccountButton.clicked.connect(self.newAccount)
 
         # load up current profiles from the database
@@ -1851,6 +2012,14 @@ class LoginWindow(QtGui.QMainWindow):
         # bring up new account wizard
         self._ = NewAccount()
         self._.show()
+
+        self.close()
+
+    def recovery(self):
+        # bring up account recovery window
+        self._ = AccountRecovery()
+        self._.show()
+
         self.close()
 
     def login(self):
@@ -1906,6 +2075,7 @@ class LoginWindow(QtGui.QMainWindow):
             # unable to create account
             self.ui.failedLoginLabel.setText("Login Failed")
             self.ui.failedLoginLabel.show()
+            self.ui.recoveryButton.show()
 
 
 if __name__ == "__main__":

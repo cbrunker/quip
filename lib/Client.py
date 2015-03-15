@@ -790,6 +790,64 @@ class ServerClient(TLSClient):
         return {f: v for f, v in (entry.split(CONS.PROFILE_VALUE_SEPARATOR) for entry in
                                   profile.decode('utf-8').rstrip().split(CONS.PROFILE_ENTRY_SEPARATOR))}
 
+    @asyncio.coroutine
+    def emailRecovery(self, email):
+        """
+        Submit e-mail address to receive a recovery code
+
+        @param email: email address to receive recovery code
+        """
+        # send email
+        yield from self.send(b''.join((bytes(str(CONS.RECOVERY_EMAIL), encoding='ascii'),
+                                       bytes(email, encoding='utf-8'))))
+
+        success = yield from self.read(2)
+
+        return int(success) == 1 if success else False
+
+    @asyncio.coroutine
+    def accountRecovery(self, code, phrase):
+        """
+        Submit recovery code and handle account recovery
+        """
+        try:
+            assert isValidUUID(code) is True
+        except AssertionError:
+            raise Exceptions.InvalidClientData("Recovery code is invalid format: {}".format(code))
+
+        try:
+            assert (len(phrase) > 32 or len(phrase) < 8) is False
+        except AssertionError:
+            raise Exceptions.InvalidClientData("Passphrase length less than 8 characters or more than 32")
+
+        # submit code
+        yield from self.send(b''.join((bytes(str(CONS.RECOVERY_CODE), encoding='ascii'),
+                                       bytes(code, encoding='ascii'))))
+
+        # retrieve uid, auth, alias
+        output = yield from self.read()
+
+        if len(output) > 2:
+            # expect uid, auth and alias
+            uid, auth, alias  = output.split(bytes(CONS.PROFILE_VALUE_SEPARATOR, encoding='utf-8'))
+
+            try:
+                assert isValidUUID(uid) is True
+                assert isValidUUID(auth) is True
+            except AssertionError:
+                return False
+
+            # recreate profile
+            self.auth = auth
+            self.profileId, self.safe = storeAccount(bytes(phrase, encoding='utf-8'), uid, auth, alias.decode('utf-8'))
+
+            success = True
+        else:
+            # recovery code not found
+            success = False
+
+        return success
+
 #######################
 # Client to P2P Server
 #######################
