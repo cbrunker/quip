@@ -10,6 +10,7 @@ if sys.version_info < (3, 4):
 
 # custom modules
 from gui.chat import Ui_Chat
+from gui.invites import Ui_Invites
 from gui.fileTransfer import Ui_FileTransfers
 from gui.profileSearch import Ui_ProfileSearch
 from gui.searchResults import Ui_SearchResults
@@ -1095,7 +1096,7 @@ class ChatWindow(QtGui.QMainWindow):
                 # show file transfer request in chat history window
                 self.ui.historyTextBrowser.append(self.templateTransfer.format(path.basename(filePath),
                                                   self.friend.alias if self.friend.alias else self.friend.uid.decode('ascii'),
-                                                  datetime.strftime(datetime.now(), "%I:%M%p")))
+                                                  datetime.now().strftime("%I:%M:%p")))
                 self.serverCallback()
             else:
                 messageBox("error", "Request Failed: Unable to contact friend")
@@ -1175,18 +1176,18 @@ class ChatWindow(QtGui.QMainWindow):
 
             if success:
                 # add message to history styled by template
-                self.ui.historyTextBrowser.append(self.templateOut.format(datetime.strftime(datetime.now(), "%I:%M%p"),
+                self.ui.historyTextBrowser.append(self.templateOut.format(datetime.now().strftime("%I:%M:%p"),
                                                                           msg.replace('\n', '<br />')))
             else:
                 # offline styled text
-                self.ui.historyTextBrowser.append(self.templateOff.format(datetime.strftime(datetime.now(), "%I:%M%p"),
+                self.ui.historyTextBrowser.append(self.templateOff.format(datetime.now().strftime("%I:%M:%p"),
                                                                           msg.replace('\n', '<br />')))
 
             # clear text entry area
             self.ui.chatTextEdit.clear()
 
     def receiveMessage(self, message):
-        self.ui.historyTextBrowser.append(self.templateIn.format(datetime.strftime(datetime.now(), "%I:%M%p"),
+        self.ui.historyTextBrowser.append(self.templateIn.format(datetime.now().strftime("%I:%M:%p"),
                                                                  message.replace('\n', '<br />')))
 
     def emoticonWindow(self):
@@ -1386,6 +1387,7 @@ class FriendsList(QtGui.QMainWindow):
         self.ui.actionSettings.triggered.connect(self.settingsWindow)
         self.ui.actionTransfers.triggered.connect(self.showTransferWindow)
         self.ui.actionQuit.triggered.connect(self.shutdown)
+        self.ui.actionInviteCodes.triggered.connect(self.invitesWindow)
 
         self.ui.actionOnline.triggered.connect(self.setStatus)
         self.ui.actionAway.triggered.connect(self.setStatus)
@@ -1539,6 +1541,13 @@ class FriendsList(QtGui.QMainWindow):
             # bring up file transfer request window
             self.fileTransferWindow(refresh=True)
 
+    def invitesWindow(self):
+        """
+        Create and show Invites window
+        """
+        self.__invitesWindow = InviteCodes(self.client, loop=self.loop)
+        self.__invitesWindow.show()
+
     def profileSearch(self):
         """
         Create profile search window
@@ -1680,6 +1689,80 @@ class FriendsList(QtGui.QMainWindow):
         profile = self.loop.run_until_complete(self.client.getProfile(userId if userId else self.client.uid))
 
         return profile
+
+class InviteCodes(QtGui.QMainWindow):
+    """
+    Invite Codes Window
+    """
+    def __init__(self, client, loop=None, parent=None):
+        super().__init__(parent)
+        self.ui = Ui_Invites()
+        self.ui.setupUi(self)
+
+        # quip server client
+        self.client = client
+
+        # asyncio loop
+        self.loop = asyncio.get_event_loop() if loop is None else loop
+
+        # windows defaults
+        self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
+
+        # connect slots and signals
+        self.ui.generateButton.clicked.connect(self.generateInvite)
+        self.ui.clearButton.clicked.connect(self.clearInvites)
+
+        # invite icons
+        self.icons = {-1: QtGui.QIcon(QtGui.QPixmap(":/quip/Images/invite_expired-16x16.png")),
+                      0: QtGui.QIcon(QtGui.QPixmap(":/quip/Images/invite_unclaimed-16x16.png")),
+                      1: QtGui.QIcon(QtGui.QPixmap(":/quip/Images/invite_claimed-16x16.png"))}
+
+        self.ui.invitesDescription.setFocus()
+
+        # populate listview with current invite codes
+        self.populateInvites()
+
+
+    def populateInvites(self):
+        """
+        Obtain invites from server and render in list view
+        """
+        items = False
+        model = QtGui.QStandardItemModel(self.ui.invitesListView)
+
+        remaining, codes = self.loop.run_until_complete(self.client.getInvites())
+
+        for code, status in sorted(codes.items(), key=lambda x: x[1]):
+            item = QtGui.QStandardItem(self.icons[status], code)
+            # insert new code at the top
+            model.insertRow(0, item)
+            items = True
+
+        if items:
+            self.ui.invitesListView.setModel(model)
+            self.ui.invitesListView.show()
+
+        # change remaining invites available label
+        self.ui.availableLabel.setText(' '.join(self.ui.availableLabel.text().split()[:-1] + [str(remaining)]))
+
+    def clearInvites(self):
+        """
+        Clear expired and claimed invites from cache
+        """
+        self.loop.run_until_complete(self.client.clearInvites())
+        self.ui.invitesListView.model().clear()
+        self.populateInvites()
+
+    def generateInvite(self):
+        """
+        Request invite code from server
+        """
+        remaining, code = self.loop.run_until_complete(self.client.generateInvite())
+
+        if code:
+            self.ui.invitesListView.model().clear()
+            self.populateInvites()
+
 
 class AccountRecovery(QtGui.QMainWindow):
     """
@@ -1909,9 +1992,11 @@ class NewAccount(QtGui.QMainWindow):
         else:
             self.reset()
 
+            # hide error label
+            self.ui.createAccountFailedLabel.hide()
             # create new account
             client = ServerClient()
-            self.background = Background(client.createAccount(self.ui.passphraseLineEdit.text(), self.ui.aliasLineEdit.text()))
+            self.background = Background(client.createAccount(self.ui.passphraseLineEdit.text(), self.ui.aliasLineEdit.text(), self.ui.codeLineEdit.text()))
             self.background.finished.connect(self._login)
             self.background.start()
 
@@ -1924,10 +2009,15 @@ class NewAccount(QtGui.QMainWindow):
         """
         # required profiled id returned from createAccount() background thread
         try:
-            profileId = self.background.result[0]
+            profileId, reason = self.background.result[0:4:3]
         except TypeError:
+            profileId = None
+            reason = "Unable to create account. Try again soon"
+
+        if profileId is None:
             self.ui.progressBar.hide()
             self.ui.createAccountButton.setDisabled(False)
+            self.ui.createAccountFailedLabel.setText(reason)
             self.ui.createAccountFailedLabel.show()
             return False
 

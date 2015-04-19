@@ -252,7 +252,7 @@ class ServerClient(TLSClient):
         return success
 
     @asyncio.coroutine
-    def createAccount(self, phrase, alias=''):
+    def createAccount(self, phrase, alias='', code=''):
         """
         Create a new account on the remote server and store information locally
 
@@ -270,16 +270,24 @@ class ServerClient(TLSClient):
 
         # send create command to server
         yield from self.send(bytes(str(CONS.LOGIN_NEW), encoding='ascii'))
+        # send invite code
+        yield from self.send(bytes(code, encoding='ascii'))
 
         # uid, pid sent back from server
         output = yield from self.read(256)
 
+        reason = ''
         try:
             uid, auth = output[:36], output[36:]
             assert isValidUUID(uid) is True
             assert isValidUUID(auth) is True
         except (ValueError, AssertionError):
-            logging.error("Invalid server response for createAccount command: {!r}".format(output))
+            if output == CONS.BFALSE:
+                logging.error("Invalid invite code used, failed to create new account")
+                reason = "Invalid invite code"
+            else:
+                logging.error("Invalid server response for createAccount command: {!r}".format(output))
+                reason = "Unable to create account. Try again soon"
             uid, auth = None, None
 
         if uid is not None:
@@ -296,9 +304,10 @@ class ServerClient(TLSClient):
                               "Received UID: {!r}".format(uid),
                               "Received Auth: {!r}".format(auth),
                               "Sent Data: {!r}".format(b''.join((uid, auth))))))
+                reason = "Unable to create account. Try again soon"
                 uid, auth = None, None
 
-        return self.profileId, uid, auth
+        return self.profileId, uid, auth, reason
 
     @asyncio.coroutine
     def login(self, profileId):
@@ -847,6 +856,72 @@ class ServerClient(TLSClient):
             success = False
 
         return success
+
+    @asyncio.coroutine
+    def generateInvite(self):
+        """
+        Request invite code from server
+
+        @return: new invite code or False (no new codes available for this user)
+        """
+        self.confirmLoggedIn()
+
+        yield from self.send(b''.join((bytes(str(CONS.INVITES_GENERATE), encoding='ascii'), self.uid, self.auth)))
+
+        # retrieve generation response
+        output = yield from self.read()
+
+        if len(output) > 4:
+            remaining, code = output.split(bytes(CONS.PROFILE_VALUE_SEPARATOR, encoding='utf-8'))
+        else:
+            remaining = b'0'
+            code = False
+
+        return int(remaining), code.decode('ascii').rstrip() if code else code
+
+    @asyncio.coroutine
+    def getInvites(self):
+        """
+        Retrieve all generated invites from server
+
+        @return: {code: status}
+        """
+        self.confirmLoggedIn()
+
+        yield from self.send(b''.join((bytes(str(CONS.INVITES_GET), encoding='ascii'), self.uid, self.auth)))
+
+
+        output = yield from self.read()
+
+        invites = {}
+        remaining = 0
+        if len(output) > 2:
+            codes = output.split(bytes(CONS.PROFILE_ENTRY_SEPARATOR, encoding='utf-8'))
+            # check for code response
+            if len(codes[1]) > 2:
+                for code in codes[1:]:
+                    code, status = code.split(bytes(CONS.PROFILE_VALUE_SEPARATOR, encoding='utf-8'))
+                    invites[code.decode('ascii')] = int(status)
+
+            remaining = int(codes[0])
+
+        return remaining, invites
+
+    @asyncio.coroutine
+    def clearInvites(self):
+        """
+        Clear all expired and claimed invites from invites cache
+
+        @return: Boolean value based on success
+        """
+        self.confirmLoggedIn()
+
+        yield from self.send(b''.join((bytes(str(CONS.INVITES_CLEAR), encoding='ascii'), self.uid, self.auth)))
+
+        success = yield from self.read(2)
+
+        return True if success == CONS.BTRUE else False
+
 
 #######################
 # Client to P2P Server

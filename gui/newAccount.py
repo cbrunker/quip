@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'newAccount.ui'
 #
-# Created: Thu Feb 12 10:59:04 2015
+# Created: Sun Apr 19 15:24:51 2015
 #      by: pyside-uic 0.2.15 running on PySide 1.2.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -12,7 +12,7 @@ from PySide import QtCore, QtGui
 class Ui_NewAccount(object):
     def setupUi(self, NewAccount):
         NewAccount.setObjectName("NewAccount")
-        NewAccount.resize(702, 480)
+        NewAccount.resize(702, 496)
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap(":/quip/Images/quip-bubble.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         NewAccount.setWindowIcon(icon)
@@ -96,7 +96,7 @@ class Ui_NewAccount(object):
         self.createAccountButton.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
         self.createAccountButton.setObjectName("createAccountButton")
         self.horizontalLayout.addWidget(self.createAccountButton)
-        self.formLayout.setLayout(12, QtGui.QFormLayout.FieldRole, self.horizontalLayout)
+        self.formLayout.setLayout(13, QtGui.QFormLayout.FieldRole, self.horizontalLayout)
         self.infoTextEdit = QtGui.QTextEdit(self.centralwidget)
         self.infoTextEdit.setStyleSheet("border-top: 1px dotted black;")
         self.infoTextEdit.setFrameShadow(QtGui.QFrame.Plain)
@@ -108,10 +108,10 @@ class Ui_NewAccount(object):
         self.passphraseLineEdit.setMaxLength(32)
         self.passphraseLineEdit.setEchoMode(QtGui.QLineEdit.PasswordEchoOnEdit)
         self.passphraseLineEdit.setObjectName("passphraseLineEdit")
-        self.formLayout.setWidget(11, QtGui.QFormLayout.FieldRole, self.passphraseLineEdit)
+        self.formLayout.setWidget(12, QtGui.QFormLayout.FieldRole, self.passphraseLineEdit)
         self.passphraseLabel = QtGui.QLabel(self.centralwidget)
         self.passphraseLabel.setObjectName("passphraseLabel")
-        self.formLayout.setWidget(11, QtGui.QFormLayout.LabelRole, self.passphraseLabel)
+        self.formLayout.setWidget(12, QtGui.QFormLayout.LabelRole, self.passphraseLabel)
         self.emailLabel = QtGui.QLabel(self.centralwidget)
         self.emailLabel.setObjectName("emailLabel")
         self.formLayout.setWidget(0, QtGui.QFormLayout.LabelRole, self.emailLabel)
@@ -119,6 +119,12 @@ class Ui_NewAccount(object):
         self.emailLineEdit.setMaxLength(255)
         self.emailLineEdit.setObjectName("emailLineEdit")
         self.formLayout.setWidget(0, QtGui.QFormLayout.FieldRole, self.emailLineEdit)
+        self.codeLabel = QtGui.QLabel(self.centralwidget)
+        self.codeLabel.setObjectName("codeLabel")
+        self.formLayout.setWidget(11, QtGui.QFormLayout.LabelRole, self.codeLabel)
+        self.codeLineEdit = QtGui.QLineEdit(self.centralwidget)
+        self.codeLineEdit.setObjectName("codeLineEdit")
+        self.formLayout.setWidget(11, QtGui.QFormLayout.FieldRole, self.codeLineEdit)
         NewAccount.setCentralWidget(self.centralwidget)
 
         self.retranslateUi(NewAccount)
@@ -152,5 +158,7 @@ class Ui_NewAccount(object):
         self.passphraseLabel.setText(QtGui.QApplication.translate("NewAccount", "Passphrase", None, QtGui.QApplication.UnicodeUTF8))
         self.emailLabel.setText(QtGui.QApplication.translate("NewAccount", "E-mail", None, QtGui.QApplication.UnicodeUTF8))
         self.emailLineEdit.setPlaceholderText(QtGui.QApplication.translate("NewAccount", "Address for account recovery and notifications (Not viewable by users)", None, QtGui.QApplication.UnicodeUTF8))
+        self.codeLabel.setText(QtGui.QApplication.translate("NewAccount", "Invite Code", None, QtGui.QApplication.UnicodeUTF8))
+        self.codeLineEdit.setPlaceholderText(QtGui.QApplication.translate("NewAccount", "(Optional) Invite or promo code for additional account features", None, QtGui.QApplication.UnicodeUTF8))
 
 from . import quip_qt_rc

@@ -2,7 +2,7 @@
 
 # Form implementation generated from reading ui file 'friendList.ui'
 #
-# Created: Thu Feb 12 10:59:04 2015
+# Created: Sun Apr 19 15:24:51 2015
 #      by: pyside-uic 0.2.15 running on PySide 1.2.2
 #
 # WARNING! All changes made in this file will be lost!
@@ -142,7 +142,10 @@ class Ui_FriendList(object):
         icon4.addPixmap(QtGui.QPixmap(":/quip/Images/notpatron.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         self.actionPatron.setIcon(icon4)
         self.actionPatron.setObjectName("actionPatron")
+        self.actionInviteCodes = QtGui.QAction(FriendList)
+        self.actionInviteCodes.setObjectName("actionInviteCodes")
         self.menuFile.addAction(self.actionTransfers)
+        self.menuFile.addAction(self.actionInviteCodes)
         self.menuFile.addSeparator()
         self.menuFile.addAction(self.actionQuit)
         self.menuFriends.addAction(self.actionSearchProfiles)
@@ -196,6 +199,8 @@ class Ui_FriendList(object):
         self.actionPatron.setText(QtGui.QApplication.translate("FriendList", "Patronage", None, QtGui.QApplication.UnicodeUTF8))
         self.actionPatron.setIconText(QtGui.QApplication.translate("FriendList", "Patronage", None, QtGui.QApplication.UnicodeUTF8))
         self.actionPatron.setToolTip(QtGui.QApplication.translate("FriendList", "Patronage", None, QtGui.QApplication.UnicodeUTF8))
+        self.actionInviteCodes.setText(QtGui.QApplication.translate("FriendList", "Invite Codes", None, QtGui.QApplication.UnicodeUTF8))
+        self.actionInviteCodes.setShortcut(QtGui.QApplication.translate("FriendList", "Ctrl+K", None, QtGui.QApplication.UnicodeUTF8))
 
 from . import quip_qt_rc
 from . import quip_qt_rc
