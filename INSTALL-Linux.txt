@@ -9,3 +9,7 @@ Install prerequisits
 * Pyside >= 1.2.1
 ** Requires QT 4.8
 
+* MiniUPnPc (Client) >= 1.9
+** Location: http://miniupnp.free.fr/
+** make pythonmodule3
+** sudo make installpythonmodule3

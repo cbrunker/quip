@@ -20,6 +20,9 @@ from nacl.secret import SecretBox
 from nacl.signing import VerifyKey
 from nacl.encoding import HexEncoder
 
+# third-part libs
+from miniupnpc import UPnP
+
 # application modules
 from lib.Constants import REQ_FRIEND, INVITE_CHAT, RECV_FILE, RECV_MSG, COMMAND_LENGTH, BTRUE, BFALSE, \
     INVALID_COMMAND, INVALID_DATA, REQ_FILE, TIMEOUT, RECV_AVATAR, LIMIT_MESSAGE_TIME
@@ -60,6 +63,9 @@ class P2PServer:
         @param profileId: logged in profile ID
         @return: P2P server object
         """
+        self.upnpClient = UPnP()
+        # port forward successful
+        self.forwarded = False
         self.server = None
         self.sock = None
         self.timeout = int(Config.idle_timeout)
@@ -356,6 +362,22 @@ class P2PServer:
         # start a new Task to handle this specific client connection
         asyncio.Task(self._handle_client(client_reader, client_writer, address))
 
+    def portForward(self, port=None, protocol='TCP'):
+        if port:
+            self.port = port
+
+        try:
+            # clear any previous port-forwarding rule on router
+            self.upnpClient.deleteportmapping(self.port, protocol)
+        except Exception as e:
+            # if the port is already removed, a base Exception will be thrown
+            pass
+
+        # (externalPort, protocol, internalHost, internalPort, desc, remoteHost)
+        self.forwarded = self.upnpClient.addportmapping(self.port, protocol,
+                                                        self.host if self.host else self.upnpClient.lanaddr,
+                                                        self.port, 'Quip Client', '')
+
     def start(self, loop):
         """
         Starts the TLS server to listen for incoming peers
@@ -363,6 +385,15 @@ class P2PServer:
         For each client that connects, the accept_client method gets called.  This method runs the loop until the
         server sockets are ready to accept connections.
         """
+        # attempt automatic port-forwarding
+        self.upnpClient.discover()
+        try:
+            self.upnpClient.selectigd()
+            self.portForward()
+        except Exception as e:
+            # unable to find router which supports automatic port forwarding
+            pass
+
         # use created SSLContext with create_server() or start_server() (abstracts create_server(), takes direct callback
         #  instead of Protocol Factory) (see PEP 3156)
 
@@ -376,6 +407,13 @@ class P2PServer:
         """
         Stops the TCP server, closes the listening socket(s).
         """
+        # clear port-forwarding rule on router
+        if self.forwarded:
+            try:
+                self.upnpClient.deleteportmapping(self.port, 'TCP')
+            except Exception as e:
+                logging.warning("Unable to delete port-forwarded port", exc_info=True)
+
         if self.server is not None:
             self.server.close()
             loop.run_until_complete(self.server.wait_closed())
