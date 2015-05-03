@@ -1,4 +1,4 @@
-Install prerequisits
+Linux Requirements
 
 * Python 3.4.x
 * OpenSSL >= 1.0.1
@@ -13,3 +13,18 @@ Install prerequisits
 ** Location: http://miniupnp.free.fr/
 ** make pythonmodule3
 ** sudo make installpythonmodule3
+
+
+Ubuntu Installation (15.04)
+
+* sudo apt-get install python3-pyside python3-pip libsodium-dev libffi-dev
+* sudo pip3 install pynacl
+* Download latest miniupnpc from http://miniupnp.free.fr/files/
+  * Extract archive:
+      tar -zxf <location>
+  * Enter extracted location:
+      cd <extracted directory>
+  * Compile python 3 module:
+      make pythonmodule3
+  * Install python 3 module:
+      sudo make installpythonmodule3
