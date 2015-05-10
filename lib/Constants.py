@@ -108,8 +108,8 @@ TCP_TIMEOUT = 10
 ################
 # Quip Server
 ################
-SERVER = 'quip.im'
-SERVER_IPv4 = '106.186.28.218'
+SERVER = 'server.quip.im'
+SERVER_IPv4 = '185.34.216.88'
 #SERVER_IPv4 = '127.0.0.1'
 SERVER_PORT = 8822
 

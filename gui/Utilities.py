@@ -157,16 +157,16 @@ class Background(QtCore.QThread):
         asyncio.set_event_loop(loop)
 
         if self.isFuture:
-            logging.debug("[Thread {}] Initiating asyncio coroutine".format(self.currentThreadId()))
+            #logging.debug("[Thread {}] Initiating asyncio coroutine".format(self.currentThreadId()))
             # run coroutine (auto wraps in asyncio.async()) or future
             self.result = loop.run_until_complete(self.function)
-            logging.debug("[Thread {}] Coroutine complete".format(self.currentThreadId()))
+            #logging.debug("[Thread {}] Coroutine complete".format(self.currentThreadId()))
         else:
-            logging.debug("[Thread {}] Initiating function".format(self.currentThreadId()))
+            #logging.debug("[Thread {}] Initiating function".format(self.currentThreadId()))
             # run function with provided arguments
             try:
                 self.result = self.function(*self.arguments)
-                logging.debug("[Thread {}] Function complete".format(self.currentThreadId()))
+                #logging.debug("[Thread {}] Function complete".format(self.currentThreadId()))
             except Exception as e:
                 self.result = e
-                logging.debug("[Thread {}] Function failed with error: {}".format(self.currentThreadId(), e))
+                #logging.debug("[Thread {}] Function failed with error: {}".format(self.currentThreadId(), e))

@@ -1750,7 +1750,8 @@ class InviteCodes(QtGui.QMainWindow):
         Clear expired and claimed invites from cache
         """
         self.loop.run_until_complete(self.client.clearInvites())
-        self.ui.invitesListView.model().clear()
+        if self.ui.invitesListView.model():
+            self.ui.invitesListView.model().clear()
         self.populateInvites()
 
     def generateInvite(self):
