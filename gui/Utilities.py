@@ -3,6 +3,7 @@
 #
 import asyncio
 import logging
+from uuid import uuid4
 from PySide import QtGui, QtCore
 from lib import Exceptions
 from lib.Client import ServerClient, P2PClient
@@ -150,6 +151,7 @@ class Background(QtCore.QThread):
         self.isFuture = isFuture
         self.exiting = False
         self.result = None
+        self.workerId = uuid4()
 
     def run(self):
         # loop has to be created and set (set_event_loop) in this thread before the async() future object is created

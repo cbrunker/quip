@@ -350,6 +350,7 @@ class P2PServer:
             # Flush buffer
             yield from client_writer.drain()
 
+    @asyncio.coroutine
     def _accept_client(self, client_reader, client_writer):
         """
         Callback method used by start_server (or create_server).
@@ -360,7 +361,10 @@ class P2PServer:
         # reset hash chain on new connection
         self.hashchain[address] = b''
         # start a new Task to handle this specific client connection
-        asyncio.Task(self._handle_client(client_reader, client_writer, address))
+        #task = asyncio.Task(self._handle_client(client_reader, client_writer, address))
+        #loop = asyncio.get_event_loop()
+       # task = loop.create_task(self._handle_client(client_reader, client_writer, address))
+        yield from self._handle_client(client_reader, client_writer, address)
 
     def portForward(self, port=None, protocol='TCP'):
         if port:

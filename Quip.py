@@ -55,7 +55,7 @@ from PySide import QtCore, QtGui
 ####################################
 
 class FileTransferWindow(QtGui.QMainWindow):
-    def __init__(self, p2pClient, server, friends, parent=None):
+    def __init__(self, p2pClient, server, friends, loop=None, parent=None):
         super().__init__(parent)
         self.ui =  Ui_FileTransfers()
         self.ui.setupUi(self)
@@ -66,7 +66,7 @@ class FileTransferWindow(QtGui.QMainWindow):
         self.server = server
         self.friends = {f.mask: f for u, f in friends.items()}
 
-        self.loop = asyncio.get_event_loop()
+        self.loop = loop or asyncio.get_event_loop()
 
         # actively downloading/uploading
         self.active = []
@@ -485,7 +485,7 @@ class ProfileView(QtGui.QMainWindow):
 
 class FriendRequest(QtGui.QWidget):
 
-    def __init__(self, client, p2pclient, callback, requests=None, parent=None):
+    def __init__(self, client, p2pclient, callback, requests=None, loop=None, parent=None):
         """
         Friend request window constuctor
 
@@ -499,6 +499,8 @@ class FriendRequest(QtGui.QWidget):
         self.ui =  Ui_FriendRequest()
         self.ui.setupUi(self)
 
+        # final requests for recursive functions
+        self._final = False
         self.client = client
         self.p2pclient = p2pclient
         # currently displayed potential friend's user ID
@@ -508,7 +510,7 @@ class FriendRequest(QtGui.QWidget):
         # obtained profile information
         self.profile = None
         # load requests
-        self.loop = asyncio.get_event_loop()
+        self.loop = loop or asyncio.get_event_loop()
         # redraw friendlist
         self.callback = callback
 
@@ -538,22 +540,36 @@ class FriendRequest(QtGui.QWidget):
             self.nextRequest()
 
     def attemptFriendship(self):
-        # show processing animation
-        self.ui.progressBar.show()
-
         # attempt to gather details from already loaded data
         msg, addr, status, rid = self.requests[self.uid]
         # mhash will be of the logged in user's ID and the sent message
         mhash = bytes(sha1(b''.join((self.client.uid, bytes(msg, encoding='utf-8')))).hexdigest(), encoding='ascii')
 
-        # attemp connection using last known address (locally stored)
-        success, token = self.loop.run_until_complete(self.p2pclient.friendCompletion(self.uid, mhash=mhash, address=addr))
+        # show processing animation
+        self.ui.progressBar.show()
+        self.background = Background(self.p2pclient.friendCompletion(self.uid, mhash=mhash, address=addr))
+        self.background.finished.connect(self._friendshipResult)
+        self.background.start()
+        self.ui.progressBar.show()
+
+    def _friendshipResult(self):
+        # attempt connection using last known address (locally stored)
+        if self.background.result:
+            success, token = self.background.result
+        else:
+            success = None
+            token = None
+
         if success:
             success = self.loop.run_until_complete(self.client.addAuthorisationToken(token=token))
         else:
             # refresh requests from server, will contain current address information
             self.requests = self.loop.run_until_complete(self.client.getRequests())
-            self.attemptFriendship()
+            if not self._final:
+                self.attemptFriendship()
+            else:
+                # reset final flag
+                self._final = False
 
         # no longer processing
         self.ui.progressBar.hide()
@@ -949,11 +965,13 @@ class EmoticonWindow(QtGui.QWidget):
         self.callback(icon.toolTip())
 
 class ChatWindow(QtGui.QMainWindow):
-    def __init__(self, alias, friend, profile, p2pClient, client, callback, serverCallback, parent=None):
+    def __init__(self, alias, friend, profile, p2pClient, client, callback, serverCallback, loop=None, parent=None):
         super().__init__(parent)
         self.ui =  Ui_Chat()
         self.ui.setupUi(self)
 
+        # background worker pointers
+        self._background = {}
         # alias of logged in user
         self.alias = alias
         # friend object of chat window
@@ -969,7 +987,7 @@ class ChatWindow(QtGui.QMainWindow):
         # server transfers reload
         self.serverCallback = serverCallback
 
-        self.loop = asyncio.get_event_loop()
+        self.loop = loop or asyncio.get_event_loop()
 
         # styling override for chat history area
         css = "p { margin-top:0px; margin-bottom:10px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px; white-space: pre-wrap;}"
@@ -1027,7 +1045,7 @@ class ChatWindow(QtGui.QMainWindow):
         ####################
         # Signal connectors
         ####################
-        self.ui.sendButton.clicked.connect(self.sendMessage)
+        self.ui.sendButton.clicked.connect(self.prepareMessage)
         self.ui.chatTextEdit.installEventFilter(self)
         self.ui.emoteToolButton.clicked.connect(self.emoticonWindow)
         #self.ui.chatTextEdit.returnPressed.connect(self.sendMessage)
@@ -1050,7 +1068,7 @@ class ChatWindow(QtGui.QMainWindow):
         if event.type() == QtCore.QEvent.KeyPress and widget is self.ui.chatTextEdit:
             key = event.key()
             if key in (QtCore.Qt.Key_Return, QtCore.Qt.Key_Enter) and event.modifiers() != QtCore.Qt.ShiftModifier:
-                self.sendMessage()
+                self.prepareMessage()
                 return True
             elif key == QtCore.Qt.Key_Space:
                 # check for emoticons when space is pressed
@@ -1130,7 +1148,7 @@ class ChatWindow(QtGui.QMainWindow):
 
         self.ui.friendAvatarLabel.setStyleSheet('\n'.join(style))
 
-    def sendMessage(self):
+    def prepareMessage(self):
         msg = self.ui.chatTextEdit.toPlainText()
         if msg:
             rich = self.ui.chatTextEdit.toHtml()
@@ -1156,35 +1174,53 @@ class ChatWindow(QtGui.QMainWindow):
             for url in URL_PATTERN.findall(msg)[1:]:
                 msg = msg.replace(url, '<a href="{0}">{0}</a>'.format(url))
 
-            # send the message
-            send_message = self.p2pClient.sendMessage(self.friend.uid, msg)
-            success = False
-            try:
-                success = self.loop.run_until_complete(send_message)
-            except Exceptions.ConnectionFailure:
-                # friend may have changed address, contact server for updated details
-                details = self.loop.run_until_complete(self.client.getDetails((self.friend.mask,)))
-                if len(details) > 1:
-                    # if we have a valid server response, update local details
-                    self.p2pClient.friends[self.friend.uid] = details[self.friend.mask][1]
-
-                    try:
-                        success = self.loop.run_until_complete(send_message)
-                    except Exceptions.ConnectionFailure:
-                        # friend uncontactable
-                        success = False
-
-            if success:
-                # add message to history styled by template
-                self.ui.historyTextBrowser.append(self.templateOut.format(datetime.now().strftime("%I:%M:%p"),
-                                                                          msg.replace('\n', '<br />')))
-            else:
-                # offline styled text
-                self.ui.historyTextBrowser.append(self.templateOff.format(datetime.now().strftime("%I:%M:%p"),
-                                                                          msg.replace('\n', '<br />')))
-
             # clear text entry area
             self.ui.chatTextEdit.clear()
+
+            # background the client sending code
+            bw = Background(self.sendMessage(msg))
+            bw.finished.connect(partial(self._displayMessage, msg, bw.workerId))
+            bw.start()
+            self._background[bw.workerId] = bw
+
+    @asyncio.coroutine
+    def sendMessage(self, msg):
+        # send the message
+        send_message = self.p2pClient.sendMessage(self.friend.uid, msg)
+        success = False
+        try:
+           # success = self.loop.run_until_complete(send_message)
+            success = yield from send_message
+        except Exceptions.ConnectionFailure:
+            # friend may have changed address, contact server for updated details
+            # details = self.loop.run_until_complete(self.client.getDetails((self.friend.mask,)))
+            details = yield from self.client.getDetails((self.friend.mask,))
+            if len(details) > 1:
+                # if we have a valid server response, update local details
+                self.p2pClient.friends[self.friend.uid] = details[self.friend.mask][1]
+
+                try:
+                    #uccess = self.loop.run_until_complete(send_message)
+                    success = yield from send_message
+                except Exceptions.ConnectionFailure:
+                    # friend uncontactable
+                    success = False
+
+        return success
+
+    def _displayMessage(self, msg, workerId):
+        success = self._background[workerId].result
+        # delete bw worker holder
+        del self._background[workerId]
+        if success:
+            # add message to history styled by template
+            self.ui.historyTextBrowser.append(self.templateOut.format(datetime.now().strftime("%I:%M:%p"),
+                                                                      msg.replace('\n', '<br />')))
+        else:
+            # offline styled text
+            self.ui.historyTextBrowser.append(self.templateOff.format(datetime.now().strftime("%I:%M:%p"),
+                                                                      msg.replace('\n', '<br />')))
+
 
     def receiveMessage(self, message):
         self.ui.historyTextBrowser.append(self.templateIn.format(datetime.now().strftime("%I:%M:%p"),
@@ -1429,12 +1465,14 @@ class FriendsList(QtGui.QMainWindow):
         return True
 
     def deleteFriend(self):
-        alias, _, mask = self.ui.friendsListView.currentIndex().data(QtCore.Qt.DisplayRole)
-        confirm = messageBox('warning', "Are you sure you want to delete {}?".format(alias),  confirm=True)
+        data = self.ui.friendsListView.currentIndex().data(QtCore.Qt.DisplayRole)
+        if data:
+            alias, _, mask = data
+            confirm = messageBox('warning', "Are you sure you want to delete {}?".format(alias),  confirm=True)
 
-        if confirm == QtGui.QMessageBox.Yes:
-            self.loop.run_until_complete(self.client.deleteFriend(mask))
-            self.drawFriendlist()
+            if confirm == QtGui.QMessageBox.Yes:
+                self.loop.run_until_complete(self.client.deleteFriend(mask))
+                self.drawFriendlist()
 
     def setStatus(self):
         """
@@ -1474,7 +1512,8 @@ class FriendsList(QtGui.QMainWindow):
             try:
                 assert self._friendRequestWindow.isVisible() is True
             except (AssertionError, AttributeError):
-                self._friendRequestWindow = FriendRequest(self.client, self.p2pClient, self.drawFriendlist, requests)
+                self._friendRequestWindow = FriendRequest(self.client, self.p2pClient, self.drawFriendlist, requests,
+                                                          loop=self.loop)
                 self._friendRequestWindow.show()
 
     def checkServer(self):
@@ -1495,7 +1534,8 @@ class FriendsList(QtGui.QMainWindow):
             except AttributeError:
                 f = self.friends[uid]
                 setattr(self, f.mask, ChatWindow(self.alias, f, self.getProfile(uid), self.p2pClient, self.client,
-                                                 self.fileTransferWindow, self.server.fileRequestsOut.reload))
+                                                 self.fileTransferWindow, self.server.fileRequestsOut.reload,
+                                                 loop=self.loop))
                 w = getattr(self, mask)
 
             for msg in messages:
@@ -1509,16 +1549,10 @@ class FriendsList(QtGui.QMainWindow):
 
             self.drawFriendlist()
 
-        # auth tokens to be processed
-        if self.server.auth or self.p2pClient.auth:
-            loop = asyncio.get_event_loop()
-        else:
-            loop = None
-
         save = False
         # send auth tokens to server
         for n, token in enumerate(self.server.auth + self.p2pClient.auth):
-            success = loop.run_until_complete(self.client.addAuthorisationToken(token=token))
+            success = self.loop.run_until_complete(self.client.addAuthorisationToken(token=token))
 
             try:
                 assert success is True
@@ -1574,7 +1608,7 @@ class FriendsList(QtGui.QMainWindow):
 
     def showTransferWindow(self):
         if self.__fileTransferWindow is None:
-            self.__fileTransferWindow = FileTransferWindow(self.p2pClient, self.server, self.friends)
+            self.__fileTransferWindow = FileTransferWindow(self.p2pClient, self.server, self.friends, loop=self.loop)
         self.__fileTransferWindow.raise_()
         self.__fileTransferWindow.show()
 
@@ -1615,22 +1649,40 @@ class FriendsList(QtGui.QMainWindow):
         except AttributeError:
             # create new chat window for friend
             setattr(self, friend.mask, ChatWindow(self.alias, friend, self.getProfile(friend.uid), self.p2pClient, self.client,
-                                                  self.fileTransferWindow, self.server.fileRequests.reload))
+                                                  self.fileTransferWindow, self.server.fileRequests.reload,
+                                                  loop=self.loop))
             w = getattr(self, friend.mask)
             w.show()
 
     def drawFriendlist(self, retry=False):
+        # uid-> mask
         masks = getMasks(self.client.safe, self.client.profileId)
         if masks:
             try:
-                # address and status information
+                # attempt bulk friend list information update
                 details = self.loop.run_until_complete(self.client.getDetails(tuple(masks.values())))
             except Exceptions.Unauthorised:
-                # friend has not yet added us, try again in 2 seconds
+                # failure on one or more friends
                 if retry:
-                    QtCore.QTimer.singleShot(2000, self.drawFriendlist)
-                return
+                    # friend acceptance handling time allowance (3 secs)
+                    QtCore.QTimer.singleShot(3000, self.drawFriendlist)
+                    return
+                else:
+                    denied = []
+                    details = {}
+                    # friend may have removed authorisation rights
+                    for mask in masks.values():
+                        try:
+                            details.update(self.loop.run_until_complete(self.client.getDetails(mask)))
+                        except Exceptions.Unauthorised:
+                            denied.append(mask)
 
+                    for mask in denied:
+                        # delete unauthorised friends
+                        self.loop.run_until_complete(self.client.deleteFriend(mask))
+
+                    # only show authorised users in friend list
+                    masks = {u: m for u, m in masks.items() if m not in denied}
 
             # mask-> uid
             uids = {v: k for k, v in masks.items()}
@@ -1676,8 +1728,9 @@ class FriendsList(QtGui.QMainWindow):
 
             uids = [u for u, f in self.friends.items() if f.status != STATUS_OFFLINE]
             if uids:
-                self.loop.run_until_complete(self.p2pClient.sendAvatar(self.__avatar,
-                                                                       [u for u, f in self.friends.items() if f.status != STATUS_OFFLINE]))
+                self.__bw = Background(self.p2pClient.sendAvatar(self.__avatar,
+                                                                 [u for u, f in self.friends.items() if f.status != STATUS_OFFLINE]))
+                self.__bw.start()
 
     def getProfile(self, userId=None):
         """
@@ -1703,7 +1756,7 @@ class InviteCodes(QtGui.QMainWindow):
         self.client = client
 
         # asyncio loop
-        self.loop = asyncio.get_event_loop() if loop is None else loop
+        self.loop = loop or asyncio.get_event_loop()
 
         # windows defaults
         self.setAttribute(QtCore.Qt.WA_DeleteOnClose)
