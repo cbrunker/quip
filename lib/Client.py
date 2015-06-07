@@ -92,6 +92,7 @@ class TLSClient:
             pass
 
         reader, writer = yield from asyncio.open_connection(host=server, port=port, ssl=self.context, loop=self.loop)
+        writer.transport.set_write_buffer_limits(low=8)
         stamp = datetime.utcnow()
         self.connections[(server, port)] = (reader, writer, stamp)
 
@@ -131,6 +132,7 @@ class ServerClient(TLSClient):
                                                             ssl=self.context, loop=self.loop)
         stamp = datetime.utcnow()
 
+        writer.transport.set_write_buffer_limits(low=8)
         self.connections[(CONS.SERVER_IPv4, CONS.SERVER_PORT)] = (reader, writer, stamp)
         return reader, writer, stamp
 
@@ -932,13 +934,13 @@ class P2PClient(TLSClient):
     Peer to Peer TLS Client
     """
 
-    def __init__(self, profileId, phrase):
+    def __init__(self, profileId, phrase, loop=None):
         """
         Peer to Peer Client for friend server interaction
 
         @return: P2PClient object
         """
-        super().__init__(profileId=profileId, phrase=phrase)
+        super().__init__(profileId=profileId, phrase=phrase, loop=loop)
 
         # incoming file requests: uid -> checksum -> filename, size
         self.fileRequests = FileRequests(self.safe, self.profileId)
@@ -1042,10 +1044,10 @@ class P2PClient(TLSClient):
                 yield from w.drain()
                 logging.info("Sent data (Backup): {!r}".format(cmd))
             except Exception as e:
-                logging.warning("Address {!r} connection failed. Reason: {}".format(addr, e))
+                logging.warning("Address {!r} connection failed. Reason: {}".format(addr, e), exc_info=True)
                 raise Exceptions.ConnectionFailure("Address {!r} connection failed. Reason: {}".format(addr, e))
         except Exception as e:
-            logging.error("Unable to contact friend {} on given address: {!r}. Reason: {}".format(uid, addr, e))
+            logging.error("Unable to contact friend {} on given address: {!r}. Reason: {}".format(uid, addr, e), exc_info=True)
             raise Exceptions.ConnectionFailure("Unable to contact friend {} on given address: {!r}. Reason: {}".format(uid, addr, e))
 
         if success and sign:

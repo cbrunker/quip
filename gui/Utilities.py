@@ -25,10 +25,10 @@ def signIn(profileId, phrase):
     reason = ''
     if profileId:
         try:
-            client = ServerClient(profileId, phrase)
+            client = ServerClient(profileId, phrase, loop=loop)
             loop.run_until_complete(client.login(profileId))
             server = runServer(profileId, phrase)
-            p2pClient = P2PClient(profileId, phrase)
+            p2pClient = P2PClient(profileId, phrase, loop=loop)
         except Exceptions.LoginFailure as ex:
             reason = "Login Failed: {}".format(ex)
 

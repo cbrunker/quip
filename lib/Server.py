@@ -186,7 +186,7 @@ class P2PServer:
         ###############################
         mask = self.friendMasks[data[-36:]]
         if command is receiveMessage:
-            msg = yield from receiveMessage(data)
+            msg = yield from receiveMessage(self.safe, self.profileId, mask, data)
             if msg:
                 # uid-> [message,...]
                 self.messages[msg[0]].append(msg[1])

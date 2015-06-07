@@ -340,7 +340,8 @@ class FileTransferWindow(QtGui.QMainWindow):
 
     @staticmethod
     def openFile(filePath):
-        QtGui.QDesktopServices.openUrl(QtCore.QUrl("file://{}".format(filePath), QtCore.QUrl.TolerantMode))
+        # qt4 doesn't accept windows path sep
+        QtGui.QDesktopServices.openUrl(QtCore.QUrl("file:///{}".format(filePath.replace('\\', '/')), QtCore.QUrl.TolerantMode))
 
 class ProfileView(QtGui.QMainWindow):
     def __init__(self, avatar, profile, client=None, p2pclient=None, callback=None, loop=None, parent=None):
@@ -1178,7 +1179,7 @@ class ChatWindow(QtGui.QMainWindow):
             self.ui.chatTextEdit.clear()
 
             # background the client sending code
-            bw = Background(self.sendMessage(msg))
+            bw = Background(self.sendMessage(msg), loop=self.loop)
             bw.finished.connect(partial(self._displayMessage, msg, bw.workerId))
             bw.start()
             self._background[bw.workerId] = bw
@@ -1193,18 +1194,21 @@ class ChatWindow(QtGui.QMainWindow):
             success = yield from send_message
         except Exceptions.ConnectionFailure:
             # friend may have changed address, contact server for updated details
-            # details = self.loop.run_until_complete(self.client.getDetails((self.friend.mask,)))
             details = yield from self.client.getDetails((self.friend.mask,))
             if len(details) > 1:
                 # if we have a valid server response, update local details
                 self.p2pClient.friends[self.friend.uid] = details[self.friend.mask][1]
 
                 try:
-                    #uccess = self.loop.run_until_complete(send_message)
+                    # second attempt at message sending
                     success = yield from send_message
                 except Exceptions.ConnectionFailure:
                     # friend uncontactable
                     success = False
+
+        if not success:
+            # unable to send friend message, ask the server to store it
+            yield from self.client.storeMessage(self.friend.mask, msg)
 
         return success
 
@@ -1507,7 +1511,13 @@ class FriendsList(QtGui.QMainWindow):
         """
         Check for friend requests
         """
-        requests = self.loop.run_until_complete(self.client.getRequests())
+
+        try:
+            requests = self.loop.run_until_complete(self.client.getRequests())
+        except RuntimeError:
+            # currently waiting on read()
+            requests = None
+
         if requests:
             try:
                 assert self._friendRequestWindow.isVisible() is True
@@ -1683,6 +1693,9 @@ class FriendsList(QtGui.QMainWindow):
 
                     # only show authorised users in friend list
                     masks = {u: m for u, m in masks.items() if m not in denied}
+            except RuntimeError:
+                # draw another time
+                return
 
             # mask-> uid
             uids = {v: k for k, v in masks.items()}

@@ -11,7 +11,7 @@ from os import path
 
 from lib.Database import getFriendRequests, getSigningKeys, setUidMask, storeAuthority, setFriendAuth, getMessageKeys, \
     setAddress, getFileRequests, storeFileRequest, delFileRequests, delFriendRequests, getFriendChecksum, \
-    updateFriendDetails
+    updateFriendDetails, storeHistory
 from lib.Utils import isValidUUID, sha1sum
 from lib.Constants import BTRUE, BFALSE, WRITE_END, COMMAND_LENGTH, NONEXISTANT, PROFILE_VALUE_SEPARATOR, \
     LIMIT_AVATAR_SIZE, MODIFIED_FILE
@@ -288,7 +288,7 @@ def receiveAvatar(reader, writer, safe, profileId, mask, checksum):
     return storedChecksum
 
 @asyncio.coroutine
-def receiveMessage(data):
+def receiveMessage(safe, profileId, mask, data):
     """
     Process data as recieved message
 
@@ -298,8 +298,7 @@ def receiveMessage(data):
     # msg portion of data
     msg = data[:-36 - COMMAND_LENGTH]
 
-    # TODO: store message history
-
+    storeHistory(safe, profileId, mask, msg, fromFriend=True)
     # uid, msg
     return (data[-36:], msg) if msg else False
 
