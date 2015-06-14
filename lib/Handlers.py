@@ -39,11 +39,13 @@ def friendAcceptance(reader, writer, safe, profileId, data, requests=None):
     @param profileId: profile ID of logged in user
     @param data: uid followed by hash of message
     @param requests: (Optional) Recent outgoing friend requests {uid: message hash}
-    @return: Friend mask if successfully added, else False
+    @return: Auth token
     """
     if not requests:
         requests = {}
 
+    # auth token
+    auth = None
     try:
         # verify required input data length
         assert len(data) == 76
@@ -53,7 +55,7 @@ def friendAcceptance(reader, writer, safe, profileId, data, requests=None):
         assert isValidUUID(uid) is True
     except AssertionError:
         logging.info("\t".join(("Invalid friend completion data received", "Data: {!r}".format(data))))
-        return b''.join((BFALSE, WRITE_END))
+        return b''.join((BFALSE, WRITE_END)), auth
 
     if uid not in requests:
         # check db for older requests
@@ -65,7 +67,7 @@ def friendAcceptance(reader, writer, safe, profileId, data, requests=None):
     except KeyError:
         logging.warning("\t".join(("Friend Request Failure",
                                    "No friend request found for given user ID", "UID: {!r}".format(uid))))
-        return b''.join((BFALSE, WRITE_END))
+        return b''.join((BFALSE, WRITE_END)), auth
 
     # ensure our potential friend has the correct hash value for the friend request
     try:
@@ -74,7 +76,7 @@ def friendAcceptance(reader, writer, safe, profileId, data, requests=None):
         logging.warning("\t".join(("Friend Request Failure", "Hash values do not match",
                                    "Sent: {!r}".format(mhash),
                                    "Local: {!r}".format(sha1(b''.join((uid, msg))).hexdigest()))))
-        return b''.join((BFALSE, WRITE_END))
+        return b''.join((BFALSE, WRITE_END)), auth
 
     # hash value has matched, get public key
     spub = getSigningKeys(safe, profileId)[1]
@@ -100,7 +102,7 @@ def friendAcceptance(reader, writer, safe, profileId, data, requests=None):
     except (KeyError, ValueError):
         logging.warning("\t".join(("Friend Request Warning",
                                    "Friendship completion failed. Storage confirmation: {!r}".format(success))))
-        return b''.join((BFALSE, WRITE_END))
+        return b''.join((BFALSE, WRITE_END)), None
 
     port = success[1:-1]
     # receive length to read
@@ -108,7 +110,7 @@ def friendAcceptance(reader, writer, safe, profileId, data, requests=None):
     try:
         length = int(data)
     except ValueError:
-        return b''.join((BFALSE, WRITE_END))
+        return b''.join((BFALSE, WRITE_END)), None
 
     data = yield from reader.read(length)
 
@@ -120,7 +122,7 @@ def friendAcceptance(reader, writer, safe, profileId, data, requests=None):
     except AssertionError:
         logging.error("\t".join(("Friend Request Failure",
                                  "Invalid mask or public key provided", "Data: {!r}".format(data))))
-        return b''.join((BFALSE, WRITE_END))
+        return b''.join((BFALSE, WRITE_END)), None
 
     # created and store localised mask of friend's true ID
     fmask = setUidMask(safe, profileId, uid)
@@ -298,9 +300,9 @@ def receiveMessage(safe, profileId, mask, data):
     # msg portion of data
     msg = data[:-36 - COMMAND_LENGTH]
 
-    storeHistory(safe, profileId, mask, msg, fromFriend=True)
+    rowid = storeHistory(safe, profileId, mask, msg, fromFriend=True)
     # uid, msg
-    return (data[-36:], msg) if msg else False
+    return (rowid, data[-36:], msg) if msg else False
 
 #######################
 # P2P Client Handlers

@@ -483,10 +483,30 @@ def storeHistory(safe, profileId, mask, message, fromFriend):
     @param mask: friend's masked ID
     @param message: message to store
     @param fromFriend: Message was sent by friend (True), instead of being sent by logged in user (False)
+    @return: inserted rowid
     """
     con = getCursor()
     con.execute("INSERT INTO history (profile_id, friend_mask, message, from_friend) VALUES (?, ?, ?, ?)",
                 [profileId, mask] + list(encrypt(safe, message, bytes(str(int(fromFriend)), encoding='ascii'))))
+
+    return con.lastrowid
+
+def getHistory(safe, profileId, mask, limit=20):
+    """
+    Return chat history for the previous <items> number of messages
+
+    @param safe: crypto box
+    @param profileId: profile ID of logged in user
+    @param mask: friend's masked ID
+    @param limit: number of items to return
+    @return: [outgoing, message, datestamp]
+    """
+
+    con = getCursor()
+    con.execute("SELECT rowid, from_friend, message, datestamp FROM history WHERE profile_Id=? AND friend_mask=? ORDER BY datestamp ASC LIMIT ?",
+                (profileId, mask, limit))
+
+    return [(rowid, bool(int(safe.decrypt(from_friend))), safe.decrypt(msg).decode(), datestamp) for rowid, from_friend, msg, datestamp in con.fetchall()]
 
 def getFriendRequests(safe, profileId, outgoing=True, expire=28):
     """
@@ -506,7 +526,7 @@ def getFriendRequests(safe, profileId, outgoing=True, expire=28):
     delete = []
     now = datetime.utcnow()
     for rowid, uid, msg, addr, timestamp in con.fetchall():
-        timestamp = datetime.strptime(safe.decrypt(timestamp).decode(encoding='ascii'),'%Y-%m-%d %H:%M:%S.%f')
+        timestamp = datetime.strptime(safe.decrypt(timestamp).decode(encoding='ascii'), '%Y-%m-%d %H:%M:%S.%f')
         # check for expired friend requests
         check = now - timestamp
         if check.days > expire:

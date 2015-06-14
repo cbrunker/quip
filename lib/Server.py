@@ -188,8 +188,8 @@ class P2PServer:
         if command is receiveMessage:
             msg = yield from receiveMessage(self.safe, self.profileId, mask, data)
             if msg:
-                # uid-> [message,...]
-                self.messages[msg[0]].append(msg[1])
+                # uid-> [(rowid, message), ...]
+                self.messages[msg[1]].append((msg[0], msg[2]))
                 returnData = BTRUE
             else:
                 returnData = BFALSE
@@ -342,7 +342,8 @@ class P2PServer:
                 returnData = yield from self._command_dispatch(client_reader, client_writer, command, b''.join((data, origin)))
             else:
                 returnData, authToken = yield from friendAcceptance(client_reader, client_writer, self.safe, self.profileId, data)
-                self.auth.append(authToken)
+                if authToken is not None:
+                    self.auth.append(authToken)
 
             # send command result to client
             client_writer.write(returnData)

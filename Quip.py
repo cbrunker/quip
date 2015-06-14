@@ -31,7 +31,7 @@ from lib.Constants import STATUS_OFFLINE, STATUS_INVISIBLE, STATUS_AWAY, STATUS_
     LIMIT_PROFILE_VALUES
 from lib.Utils import isValidUUID, checkCerts
 from lib.Client import ServerClient
-from lib.Database import getProfiles, getAvatar, getFriends, getMasks, updateLocalProfile, delFileRequests
+from lib.Database import getProfiles, getAvatar, getFriends, getMasks, updateLocalProfile, delFileRequests, getHistory
 from lib.Countries import COUNTRIES
 
 # inbuilt modules
@@ -966,11 +966,13 @@ class EmoticonWindow(QtGui.QWidget):
         self.callback(icon.toolTip())
 
 class ChatWindow(QtGui.QMainWindow):
-    def __init__(self, alias, friend, profile, p2pClient, client, callback, serverCallback, loop=None, parent=None):
+    def __init__(self, alias, friend, profile, p2pClient, client, callback, serverCallback, ignore=None, loop=None, parent=None):
         super().__init__(parent)
         self.ui =  Ui_Chat()
         self.ui.setupUi(self)
 
+        # ignore the following ids from history output, allows for new messages to be displayed
+        ignore = ignore or []
         # background worker pointers
         self._background = {}
         # alias of logged in user
@@ -1057,6 +1059,16 @@ class ChatWindow(QtGui.QMainWindow):
         self.setDetails()
         self.setAvatar()
         self.setStatus()
+
+        # draw previous history
+        history = getHistory(self.client.safe, self.client.profileId, self.friend.mask)
+        for recevied, msg, tstamp in ((r, m, t) for rowid, r, m, t in history if rowid not in ignore):
+            name = self.friend.alias if recevied else self.alias
+            # format history messages
+            historyFormat = self.templateBase.format(self.offlineColour, space * 7,
+                                                     name,
+                                                     space * (LIMIT_PROFILE_VALUES['alias'] - len(name))).replace("positional", "{}")
+            self.ui.historyTextBrowser.append(historyFormat.format(tstamp, msg.replace('\n', '<br />')))
 
         # ensure the msg area has foxus
         self.ui.chatTextEdit.setFocus()
@@ -1545,10 +1557,10 @@ class FriendsList(QtGui.QMainWindow):
                 f = self.friends[uid]
                 setattr(self, f.mask, ChatWindow(self.alias, f, self.getProfile(uid), self.p2pClient, self.client,
                                                  self.fileTransferWindow, self.server.fileRequestsOut.reload,
-                                                 loop=self.loop))
+                                                 ignore=[rowid for rowid, message in messages], loop=self.loop))
                 w = getattr(self, mask)
 
-            for msg in messages:
+            for (rowid, msg) in messages:
                 # decode bytes data received by server
                 w.receiveMessage(msg.decode('utf-8'))
 
@@ -1658,8 +1670,8 @@ class FriendsList(QtGui.QMainWindow):
             w.raise_()
         except AttributeError:
             # create new chat window for friend
-            setattr(self, friend.mask, ChatWindow(self.alias, friend, self.getProfile(friend.uid), self.p2pClient, self.client,
-                                                  self.fileTransferWindow, self.server.fileRequests.reload,
+            setattr(self, friend.mask, ChatWindow(self.alias, friend, self.getProfile(friend.uid), self.p2pClient,
+                                                  self.client, self.fileTransferWindow, self.server.fileRequests.reload,
                                                   loop=self.loop))
             w = getattr(self, friend.mask)
             w.show()

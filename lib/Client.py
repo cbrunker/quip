@@ -628,7 +628,8 @@ class ServerClient(TLSClient):
             try:
                 msg, ts, address, rowid = getFriendRequests(self.safe, self.profileId, outgoing=False, expire=int(self.config.request_expiry))[uid]
             except (KeyError, ValueError):
-                logging.warning("Friend Completion Error", "Friend request for user {} does not exist".format(uid))
+                logging.warning("\t".join(("Friend Completion Error",
+                                           "Friend request for user {} does not exist".format(uid))))
                 return False
 
         yield from self.send(b''.join((bytes(str(CONS.FRIEND_REQUEST_DEL), encoding='ascii'),
@@ -1096,8 +1097,12 @@ class P2PClient(TLSClient):
         @param message: message to send
         @return: True if message successfully sent, otherwise False
         """
-        success = yield from self.send(uid, CONS.RECV_MSG, b''.join((bytes(message, encoding='utf-8'),
-                                                                    bytes(str(CONS.RECV_MSG), encoding='ascii'))))
+        msg = bytes(message, encoding='utf-8')
+        success = yield from self.send(uid, CONS.RECV_MSG, b''.join((msg, bytes(str(CONS.RECV_MSG), encoding='ascii'))))
+
+        if success:
+            # store our outgoing message
+            storeHistory(self.safe, self.profileId, self.masks[uid], msg, fromFriend=False)
 
         return success
 
@@ -1293,7 +1298,8 @@ class P2PClient(TLSClient):
                 msg, ts, address, rowid = getFriendRequests(self.safe, self.profileId, outgoing=False, expire=int(self.config.request_expiry))[uid]
                 address = address.decode('ascii')
             except (KeyError, ValueError):
-                logging.warning("Friend Completion Error", "Friend request for user {} does not exist".format(uid))
+                logging.warning("\t".join(("Friend Completion Error",
+                                           "Friend request for user {} does not exist".format(uid))))
                 raise Exceptions.FriendshipFailure("Friend request does not exist")
             mhash = bytes(sha1(b''.join((self.uid, msg))).hexdigest(), encoding='ascii')
 
@@ -1312,7 +1318,8 @@ class P2PClient(TLSClient):
             assert len(data) > 115
             assert isValidUUID(fauth) is True
         except AssertionError:
-            logging.warning("Friend Completion Error", "Invalid auth token {!r} provided by user {}".format(fauth, uid))
+            logging.warning("\t".join(("Friend Completion Error",
+                                       "Invalid auth token {!r} provided by user {}".format(fauth, uid))))
             raise Exceptions.FriendshipFailure("Invalid auth token provided: {!r}".format(fauth))
 
 
