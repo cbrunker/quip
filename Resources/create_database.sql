@@ -54,6 +54,7 @@ CREATE TABLE address(
 CREATE TABLE history(
   profile_id  INTEGER,
   friend_mask TEXT,
+  datestamp   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   message     BLOB,
   from_friend BLOB,
   
