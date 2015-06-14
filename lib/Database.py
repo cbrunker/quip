@@ -437,6 +437,20 @@ def getFriendAuth(safe, profileId, mask):
 
     return tuple(safe.decrypt(i) for i in out)
 
+def getAuthTokens(safe, profileId):
+    """
+    Return all auth tokens and their associated mask value
+
+    :param safe: crypto box
+    :param profileId: profile ID of logged in user
+    :return: iterable of dict token->mask
+    """
+    con = getCursor()
+    con.execute("SELECT auth_token, friend_mask FROM friend_auth WHERE profile_id=?", (profileId))
+    out = con.fetchone() or ()
+
+    return {safe.decrypt(token): mask for token, mask in out}
+
 def setFriendAuth(safe, profileId, mask, authToken, sentToken):
     """
     Set profile's authorised mask associated with friend
@@ -474,7 +488,7 @@ def updateFriendAuth(safe, profileId, mask, authToken=False, sentToken=False):
         con.execute("UPDATE friend_auth SET sent_token=? WHERE profile_id=? AND friend_mask=?",
                     list(encrypt(safe, sentToken)) if sentToken is not None else [b''] + [profileId, mask])
 
-def storeHistory(safe, profileId, mask, message, fromFriend):
+def storeHistory(safe, profileId, mask, message, fromFriend, timestamp=None):
     """
     Store messages in database
 
@@ -483,11 +497,16 @@ def storeHistory(safe, profileId, mask, message, fromFriend):
     @param mask: friend's masked ID
     @param message: message to store
     @param fromFriend: Message was sent by friend (True), instead of being sent by logged in user (False)
+    @param timestamp: Custom timestamp for received message, default uses current time
     @return: inserted rowid
     """
     con = getCursor()
-    con.execute("INSERT INTO history (profile_id, friend_mask, message, from_friend) VALUES (?, ?, ?, ?)",
-                [profileId, mask] + list(encrypt(safe, message, bytes(str(int(fromFriend)), encoding='ascii'))))
+    if not timestamp:
+        con.execute("INSERT INTO history (profile_id, friend_mask, message, from_friend) VALUES (?, ?, ?, ?)",
+                    [profileId, mask] + list(encrypt(safe, message, bytes(str(int(fromFriend)), encoding='ascii'))))
+    else:
+        con.execute("INSERT INTO history (profile_id, friend_mask, datestamp, message, from_friend) VALUES (?, ?, ?, ?, ?)",
+                    [profileId, mask, timestamp] + list(encrypt(safe, message, bytes(str(int(fromFriend)), encoding='ascii'))))
 
     return con.lastrowid
 

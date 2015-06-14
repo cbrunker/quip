@@ -25,7 +25,7 @@ from lib.Containers import Friends, FileRequests, Masks
 from lib.Database import storeAccount, updateAccount, getAccount, getSigningKeys, getUidMask, getAuthority, storeHistory,\
     getFriendAuth, updateAddress, getFriendRequests, setUidMask, setFriendAuth, storeAuthority, storeFriendRequest,\
     deleteAccount, getMessageKeys, updateFriendAuth, getLocalAuth, setAddress, storeFileRequest, delFileRequests,\
-    delFriendRequests, getAvatar, getMasks, deleteFriend
+    delFriendRequests, getAvatar, getMasks, deleteFriend, getAuthTokens
 from lib.Utils import isValidUUID, sha1sum, encrypt
 
 
@@ -680,7 +680,7 @@ class ServerClient(TLSClient):
         return success
 
     @asyncio.coroutine
-    def getMessages(self, tokenMasks):
+    def getMessages(self):
         """
         Obtain any offline messages stored on the server
 
@@ -696,19 +696,26 @@ class ServerClient(TLSClient):
         boxes = {}
 
         msg = yield from self.read()
-        while msg != CONS.WRITE_END:
-            byteSize = int(msg)
-            msg = yield from self.read(byteSize)
-            token, msg = msg[:36], msg[36:]
-            # get unmasked uid
-            mask = tokenMasks[token]
+        if len(msg) > 2:
+            tokens = getAuthTokens(self.safe, self.profileId)
 
-            messages[mask].append(boxes.setdefault(mask,
-                                                   Box(PrivateKey(getMessageKeys(self.safe, self.profileId)[0]),
-                                                       PublicKey(getAuthority(self.safe, self.profileId, mask)[1])
-                                                   )).decrypt(msg))
+            while msg != CONS.WRITE_END:
+                byteSize = int(msg)
+                msg = yield from self.read(byteSize)
+                token, tstamp, msg = msg[:36], msg[:36:46], msg[46:]
+                # get unmasked uid
+                mask = tokens.get(token)
 
-            msg = yield from self.read()
+                if mask:
+                    # timestamp of message
+                    tstamp = datetime.fromtimestamp(int(tstamp)).strftime("%Y-%m-%d %H:%M:%S")
+                    storeHistory(self.safe, self.profileId, mask, msg, True, tstamp)
+                    messages[mask].append(boxes.setdefault(mask,
+                                                           Box(PrivateKey(getMessageKeys(self.safe, self.profileId)[0]),
+                                                               PublicKey(getAuthority(self.safe, self.profileId, mask)[1])
+                                                           )).decrypt(msg))
+
+                msg = yield from self.read()
 
         return messages
 

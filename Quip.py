@@ -1238,8 +1238,8 @@ class ChatWindow(QtGui.QMainWindow):
                                                                       msg.replace('\n', '<br />')))
 
 
-    def receiveMessage(self, message):
-        self.ui.historyTextBrowser.append(self.templateIn.format(datetime.now().strftime("%I:%M:%p"),
+    def receiveMessage(self, message, timestamp=None):
+        self.ui.historyTextBrowser.append(self.templateIn.format(datetime.now().strftime("%I:%M:%p") if timestamp is None else timestamp,
                                                                  message.replace('\n', '<br />')))
 
     def emoticonWindow(self):
@@ -1402,11 +1402,16 @@ class FriendsList(QtGui.QMainWindow):
         self.timer.timeout.connect(self.checkServer)
         self.timer.start(300)
 
+        # periodic offline msg check (15secs)
+        self.mtimer = QtCore.QTimer(self)
+        self.mtimer.timeout.connect(self.getMessages)
+        self.mtimer.start(15000)
+
         # TODO: replace with UDP heartbeat
         self.ftimer = QtCore.QTimer(self)
-        self.timer.timeout.connect(self.getRequests)
+        self.ftimer.timeout.connect(self.getRequests)
         # every 5 seconds
-        self.timer.start(5000)
+        self.ftimer.start(5000)
 
         ######################
         # Additional UI setup
@@ -1519,11 +1524,25 @@ class FriendsList(QtGui.QMainWindow):
 
         self.ui.avatarLabel.setStyleSheet('\n'.join(style))
 
+    def getMessages(self):
+        """
+        Check for server stored messages (sent to user while user was offline or not contactable)
+        """
+        try:
+            messages = self.loop.run_until_complete(self.client.getMessages())
+        except RuntimeError:
+            # currently waiting on read()
+            messages = None
+
+        # add to server message storage for GUI retrieval
+        for uid, msgs in messages.items():
+            for msg in msgs:
+                self.server.messages[uid].append(msg)
+
     def getRequests(self):
         """
         Check for friend requests
         """
-
         try:
             requests = self.loop.run_until_complete(self.client.getRequests())
         except RuntimeError:
@@ -1544,7 +1563,7 @@ class FriendsList(QtGui.QMainWindow):
         """
         # send messages to their appropriate chat window
         while True:
-            # destructive iterate over message container to ensure all messages are obtained before deletion
+            # destructively iterate over message container to ensure all messages are obtained before deletion
             try:
                 uid, messages = self.server.messages.popitem()
             except KeyError:
@@ -1557,12 +1576,12 @@ class FriendsList(QtGui.QMainWindow):
                 f = self.friends[uid]
                 setattr(self, f.mask, ChatWindow(self.alias, f, self.getProfile(uid), self.p2pClient, self.client,
                                                  self.fileTransferWindow, self.server.fileRequestsOut.reload,
-                                                 ignore=[rowid for rowid, message in messages], loop=self.loop))
+                                                 ignore=[rowid for rowid, message, ts in messages], loop=self.loop))
                 w = getattr(self, mask)
 
-            for (rowid, msg) in messages:
+            for (rowid, msg, tstamp) in messages:
                 # decode bytes data received by server
-                w.receiveMessage(msg.decode('utf-8'))
+                w.receiveMessage(msg.decode('utf-8'), timestamp=tstamp)
 
             if not w.isActiveWindow():
                 self.pending[uid] += len(messages)

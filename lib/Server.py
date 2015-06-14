@@ -188,8 +188,8 @@ class P2PServer:
         if command is receiveMessage:
             msg = yield from receiveMessage(self.safe, self.profileId, mask, data)
             if msg:
-                # uid-> [(rowid, message), ...]
-                self.messages[msg[1]].append((msg[0], msg[2]))
+                # uid-> [(rowid, message, tstamp), ...]
+                self.messages[msg[1]].append((msg[0], msg[2], None))
                 returnData = BTRUE
             else:
                 returnData = BFALSE
